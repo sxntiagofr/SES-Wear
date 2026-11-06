@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "729724383277",
+    "project_id": "ses-wear",
+    "storage_bucket": "ses-wear.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:729724383277:android:5bf527e6447ecb657a88a4",
+        "android_client_info": {
+          "package_name": "com.example.ses_wear"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUeo2ouIeXAFlzcb0grhakw1g-ATs0u28"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
