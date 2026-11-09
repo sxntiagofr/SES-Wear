@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SES Wear · Asistente</title>
+<style>
+  :root {
+    --morado: #7b3fe4;
+    --morado-oscuro: #5a22c0;
+    --degradado: linear-gradient(135deg, #7b3fe4 0%, #b44fd6 55%, #f0679e 100%);
+    --fondo: #f3effa;
+    --telefono: #ffffff;
+    --texto: #1f1630;
+    --texto-suave: #6d6480;
+    --burbuja-asistente: #f1ecfb;
+    --borde: #e4dcf3;
+    --chip: #ffffff;
+    --error: #c62f4a;
+    --sombra-menu: 0 10px 30px rgba(60, 20, 120, .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #0f0b17;
+      --telefono: #17121f;
+      --texto: #f1ecfa;
+      --texto-suave: #a79cbc;
+      --burbuja-asistente: #251d33;
+      --borde: #2f2640;
+      --chip: #1e1729;
+      --error: #ff6f87;
+      --sombra-menu: 0 10px 30px rgba(0, 0, 0, .5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--fondo);
+    color: var(--texto);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .telefono {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    height: 100%;
+    max-height: 860px;
+    background: var(--telefono);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  @media (min-width: 480px) {
+    body { padding: 24px; }
+    .telefono { border-radius: 32px; box-shadow: 0 20px 60px rgba(60, 20, 120, .25); border: 1px solid var(--borde); }
+  }
+
+  header {
+    background: var(--degradado);
+    color: #fff;
+    padding: 18px 16px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: rgba(255, 255, 255, .18);
+    display: grid; place-items: center; flex: none;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 700; }
+  header p { font-size: 12.5px; margin: 2px 0 0; opacity: .88; }
+  .estado { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #7dffb3; margin-right: 5px; vertical-align: 1px; }
+
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 82%;
+    padding: 10px 13px;
+    border-radius: 18px;
+    line-height: 1.42;
+    font-size: 14.5px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .msg p { margin: 0; }
+  .msg p + p, .msg ul + p, .msg p + ul { margin-top: 6px; }
+  .msg ul { margin: 4px 0 0; padding-left: 18px; }
+  .msg img.foto { display: block; width: 100%; max-width: 220px; border-radius: 12px; margin-bottom: 6px; }
+  .usuario { align-self: flex-end; background: var(--morado); color: #fff; border-bottom-right-radius: 6px; }
+  .usuario.con-foto { padding: 6px 6px 10px; }
+  .usuario.con-foto p { padding: 0 7px; }
+  .asistente { align-self: flex-start; background: var(--burbuja-asistente); border-bottom-left-radius: 6px; }
+  .error { align-self: center; background: transparent; color: var(--error); font-size: 13px; text-align: center; max-width: 95%; }
+
+  .escribiendo { display: inline-flex; gap: 4px; padding: 4px 2px; }
+  .escribiendo span { width: 7px; height: 7px; border-radius: 50%; background: var(--texto-suave); animation: rebote 1.2s infinite ease-in-out; }
+  .escribiendo span:nth-child(2) { animation-delay: .15s; }
+  .escribiendo span:nth-child(3) { animation-delay: .3s; }
+  @keyframes rebote { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-4px); } }
+
+  #sugerencias { display: flex; gap: 8px; overflow-x: auto; padding: 4px 14px 10px; scrollbar-width: none; }
+  #sugerencias::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none;
+    border: 1px solid var(--borde);
+    background: var(--chip);
+    color: var(--texto);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .chip:hover { border-color: var(--morado); }
+  .chip.foto-chip { border-color: var(--morado); color: var(--morado); font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .chip.foto-chip { color: #c3a2ff; } }
+
+  /* Foto lista para enviar */
+  #vistaPrevia {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin: 0 12px 8px;
+    padding: 8px;
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    background: var(--chip);
+    font-size: 13px;
+    color: var(--texto-suave);
+  }
+  #vistaPrevia.visible { display: flex; }
+  #vistaPrevia img { width: 52px; height: 52px; object-fit: cover; border-radius: 10px; flex: none; }
+  #vistaPrevia span { flex: 1; }
+  #quitarFoto {
+    flex: none; width: 28px; height: 28px; border-radius: 50%;
+    border: 0; background: var(--burbuja-asistente); color: var(--texto); cursor: pointer; font-size: 16px; line-height: 1;
+  }
+
+  form {
+    position: relative;
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--borde);
+  }
+  textarea {
+    flex: 1;
+    resize: none;
+    overflow-y: hidden;
+    border: 1px solid var(--borde);
+    background: var(--chip);
+    color: var(--texto);
+    border-radius: 22px;
+    padding: 11px 15px;
+    font: inherit;
+    font-size: 14.5px;
+    max-height: 120px;
+    outline: none;
+  }
+  textarea:focus { border-color: var(--morado); }
+  .redondo {
+    flex: none;
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 0;
+    cursor: pointer;
+    display: grid; place-items: center;
+    align-self: flex-end;
+  }
+  button.enviar { background: var(--degradado); color: #fff; }
+  button.adjuntar { background: var(--burbuja-asistente); color: var(--morado); }
+  @media (prefers-color-scheme: dark) { button.adjuntar { color: #c3a2ff; } }
+  .redondo:disabled { opacity: .45; cursor: default; }
+
+  #menuFoto {
+    display: none;
+    position: absolute;
+    left: 12px;
+    bottom: 62px;
+    background: var(--telefono);
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    box-shadow: var(--sombra-menu);
+    overflow: hidden;
+    z-index: 5;
+  }
+  #menuFoto.visible { display: block; }
+  #menuFoto button {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    border: 0;
+    background: transparent;
+    color: var(--texto);
+    font: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  #menuFoto button:hover { background: var(--burbuja-asistente); }
+  #menuFoto button + button { border-top: 1px solid var(--borde); }
+
+  /* Cámara (PC con webcam) */
+  #camara {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: #000;
+    z-index: 10;
+    flex-direction: column;
+  }
+  #camara.visible { display: flex; }
+  #camara video { flex: 1; width: 100%; min-height: 0; object-fit: cover; }
+  #camara .controles { display: flex; justify-content: space-around; align-items: center; padding: 18px; background: #000; }
+  #camara .controles button { border: 0; cursor: pointer; }
+  #cancelarCamara { background: transparent; color: #fff; font: inherit; font-size: 15px; padding: 10px; }
+  #disparar { width: 66px; height: 66px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.35); }
+  #camara .ayuda { position: absolute; top: 14px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; text-shadow: 0 1px 4px rgba(0,0,0,.7); }
+
+  nav {
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 6px 12px;
+    border-top: 1px solid var(--borde);
+    font-size: 11px;
+    color: var(--texto-suave);
+  }
+  nav div { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  nav .activo { color: var(--morado); font-weight: 600; }
+  @media (prefers-color-scheme: dark) { nav .activo { color: #b78cff; } }
+
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<div class="telefono">
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 6.5a1.8 1.8 0 1 1 1.8-1.8c0 .9-.6 1.3-1.2 1.7-.4.3-.6.6-.6 1.1v.8"/>
+        <path d="M12 8.3 3.2 14.6c-.9.7-.4 2 .7 2h16.2c1.1 0 1.6-1.3.7-2L12 8.3Z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Asistente SES Wear</h1>
+      <p><span class="estado"></span>Tu estilo, más inteligente</p>
+    </div>
+  </header>
+
+  <main id="chat" aria-live="polite"></main>
+
+  <div id="sugerencias">
+    <button class="chip foto-chip" type="button" data-accion="foto">📷 ¿Esta prenda me sirve?</button>
+    <button class="chip" type="button">¿Qué me pongo para una entrevista?</button>
+    <button class="chip" type="button">Outfit para la U con frío</button>
+    <button class="chip" type="button">¿Qué combina con un jean azul?</button>
+    <button class="chip" type="button">Ideas para una fiesta casual</button>
+  </div>
+
+  <div id="vistaPrevia">
+    <img id="miniatura" alt="Foto lista para enviar">
+    <span>Foto lista. Escribe la ocasión, p. ej. "¿sirve para una boda de día?"</span>
+    <button id="quitarFoto" type="button" aria-label="Quitar foto">×</button>
+  </div>
+
+  <div id="menuFoto" role="menu">
+    <button type="button" id="opcionCamara" role="menuitem">📷 Tomar foto</button>
+    <button type="button" id="opcionGaleria" role="menuitem">🖼️ Elegir de la galería</button>
+  </div>
+
+  <form id="formulario">
+    <button class="redondo adjuntar" id="botonFoto" type="button" aria-label="Agregar foto de una prenda" aria-haspopup="menu">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+    </button>
+    <textarea id="entrada" rows="1" placeholder="Escribe un mensaje…" aria-label="Mensaje"></textarea>
+    <button class="redondo enviar" id="boton" type="submit" aria-label="Enviar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4 21 12 3.4 3.6 3.3 10l12.6 2-12.6 2z"/></svg>
+    </button>
+  </form>
+
+  <!-- En el celular "capture" abre directamente la cámara trasera. -->
+  <input id="archivoCamara" class="oculto" type="file" accept="image/*" capture="environment">
+  <input id="archivoGaleria" class="oculto" type="file" accept="image/*">
+
+  <div id="camara" aria-label="Cámara">
+    <div class="ayuda">Encuadra la prenda completa, con buena luz</div>
+    <video id="video" autoplay playsinline muted></video>
+    <div class="controles">
+      <button id="cancelarCamara" type="button">Cancelar</button>
+      <button id="disparar" type="button" aria-label="Tomar foto"></button>
+      <span style="width:64px"></span>
+    </div>
+  </div>
+
+  <nav aria-hidden="true">
+    <div>🏠<span>Inicio</span></div>
+    <div>👕<span>Armario</span></div>
+    <div>✨<span>Outfits</span></div>
+    <div class="activo">💬<span>Asistente</span></div>
+    <div>👤<span>Perfil</span></div>
+  </nav>
+</div>
+
+<script>
+  const chat = document.getElementById("chat");
+  const formulario = document.getElementById("formulario");
+  const entrada = document.getElementById("entrada");
+  const boton = document.getElementById("boton");
+  const sugerencias = document.getElementById("sugerencias");
+  const botonFoto = document.getElementById("botonFoto");
+  const menuFoto = document.getElementById("menuFoto");
+  const vistaPrevia = document.getElementById("vistaPrevia");
+  const miniatura = document.getElementById("miniatura");
+  const archivoCamara = document.getElementById("archivoCamara");
+  const archivoGaleria = document.getElementById("archivoGaleria");
+  const camara = document.getElementById("camara");
+  const video = document.getElementById("video");
+
+  // Historial que se envía completo en cada mensaje: [{ rol, texto, imagen? }]
+  const historial = [];
+  let ocupado = false;
+  // Foto adjunta pendiente de enviar: { tipo, datos (base64), url (para mostrarla) }
+  let fotoPendiente = null;
+  let flujoCamara = null;
+
+  const LADO_MAXIMO_FOTO = 1024;
+  const PLACEHOLDER = "Escribe un mensaje…";
+  const PLACEHOLDER_FOTO = "¿Para qué ocasión? (opcional)";
+
+  const BIENVENIDA = "¡Hola! Soy tu asistente de estilo de **SES Wear**. Cuéntame para qué ocasión te quieres vestir, o mándame una **foto de una prenda** y te digo si te sirve.";
+
+  function escapar(texto) {
+    return texto.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // Formato mínimo: párrafos, listas con "-" o "•", **negrita** y *cursiva*.
+  function formatear(texto) {
+    const lineas = escapar(texto)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(?!\s)([^*\n]+?)\*/g, "<em>$1</em>")
+      .split("\n");
+    let html = "", enLista = false;
+    for (const linea of lineas) {
+      const item = linea.match(/^\s*(?:[-•*]|\d+\.)\s+(.*)/);
+      if (item) {
+        if (!enLista) { html += "<ul>"; enLista = true; }
+        html += `<li>${item[1]}</li>`;
+      } else {
+        if (enLista) { html += "</ul>"; enLista = false; }
+        if (linea.trim()) html += `<p>${linea}</p>`;
+      }
+    }
+    if (enLista) html += "</ul>";
+    return html;
+  }
+
+  function agregarBurbuja(clase, texto, urlFoto) {
+    const div = document.createElement("div");
+    div.className = `msg ${clase}`;
+    if (urlFoto) {
+      div.classList.add("con-foto");
+      const img = document.createElement("img");
+      img.className = "foto";
+      img.src = urlFoto;
+      img.alt = "Foto de la prenda";
+      img.addEventListener("load", () => { chat.scrollTop = chat.scrollHeight; });
+      div.appendChild(img);
+    }
+    if (texto) div.insertAdjacentHTML("beforeend", formatear(texto));
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  function mostrarEscribiendo(burbuja) {
+    burbuja.innerHTML = '<span class="escribiendo"><span></span><span></span><span></span></span>';
+  }
+
+  function mostrarError(mensaje) {
+    chat.querySelectorAll(".error").forEach((e) => e.remove());
+    agregarBurbuja("error", mensaje);
+  }
+
+  function ajustarAltura() {
+    entrada.style.height = "auto";
+    entrada.style.height = Math.min(entrada.scrollHeight, 120) + "px";
+    entrada.style.overflowY = entrada.scrollHeight > 120 ? "auto" : "hidden";
+  }
+
+  // ---------- Fotos ----------
+
+  // Dibuja la imagen en un canvas de máximo 1024 px y la convierte a JPEG,
+  // para que la foto pese poco al enviarla.
+  function reducirFoto(fuente, ancho, alto) {
+    const escala = Math.min(1, LADO_MAXIMO_FOTO / Math.max(ancho, alto));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(ancho * escala);
+    canvas.height = Math.round(alto * escala);
+    canvas.getContext("2d").drawImage(fuente, 0, 0, canvas.width, canvas.height);
+    const url = canvas.toDataURL("image/jpeg", 0.85);
+    return { tipo: "image/jpeg", datos: url.split(",")[1], url };
+  }
+
+  function cargarArchivo(archivo) {
+    return new Promise((resolve, reject) => {
+      const urlTemporal = URL.createObjectURL(archivo);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(urlTemporal);
+        resolve(reducirFoto(img, img.naturalWidth, img.naturalHeight));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(urlTemporal);
+        reject(new Error("No se pudo abrir esa imagen. Prueba con una foto JPG o PNG."));
+      };
+      img.src = urlTemporal;
+    });
+  }
+
+  function ponerFoto(foto) {
+    fotoPendiente = foto;
+    miniatura.src = foto.url;
+    vistaPrevia.classList.add("visible");
+    entrada.placeholder = PLACEHOLDER_FOTO;
+    entrada.focus();
+  }
+
+  function quitarFoto() {
+    fotoPendiente = null;
+    vistaPrevia.classList.remove("visible");
+    miniatura.removeAttribute("src");
+    entrada.placeholder = PLACEHOLDER;
+  }
+
+  async function alElegirArchivo(evento) {
+    const archivo = evento.target.files?.[0];
+    evento.target.value = "";
+    if (!archivo) return;
+    try {
+      ponerFoto(await cargarArchivo(archivo));
+    } catch (error) {
+      mostrarError(error.message);
+    }
+  }
+
+  const esCelular = matchMedia("(pointer: coarse)").matches;
+
+  async function tomarFoto() {
+    cerrarMenu();
+    // En el celular se usa la cámara nativa; en el PC, la webcam dentro de la página.
+    if (esCelular || !navigator.mediaDevices?.getUserMedia) {
+      archivoCamara.click();
+      return;
+    }
+    try {
+      flujoCamara = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      video.srcObject = flujoCamara;
+      camara.classList.add("visible");
+    } catch {
+      mostrarError("No se pudo abrir la cámara. Revisa los permisos o elige una foto de la galería.");
+    }
+  }
+
+  function cerrarCamara() {
+    flujoCamara?.getTracks().forEach((t) => t.stop());
+    flujoCamara = null;
+    video.srcObject = null;
+    camara.classList.remove("visible");
+  }
+
+  function disparar() {
+    if (!video.videoWidth) return;
+    ponerFoto(reducirFoto(video, video.videoWidth, video.videoHeight));
+    cerrarCamara();
+  }
+
+  function abrirMenu() { menuFoto.classList.add("visible"); }
+  function cerrarMenu() { menuFoto.classList.remove("visible"); }
+
+  // ---------- Envío ----------
+
+  async function enviar(texto) {
+    texto = texto.trim();
+    if ((!texto && !fotoPendiente) || ocupado) return;
+    ocupado = true;
+    boton.disabled = true;
+    botonFoto.disabled = true;
+    sugerencias.style.display = "none";
+    chat.querySelectorAll(".error").forEach((e) => e.remove());
+
+    const foto = fotoPendiente;
+    const mensaje = { rol: "usuario", texto };
+    if (foto) mensaje.imagen = { tipo: foto.tipo, datos: foto.datos };
+    historial.push(mensaje);
+    const burbujaUsuario = agregarBurbuja("usuario", texto, foto?.url);
+    entrada.value = "";
+    quitarFoto();
+    ajustarAltura();
+
+    const burbuja = agregarBurbuja("asistente");
+    mostrarEscribiendo(burbuja);
+
+    let acumulado = "";
+    try {
+      const respuesta = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mensajes: historial }),
+      });
+
+      if (!respuesta.ok && !respuesta.headers.get("content-type")?.includes("ndjson")) {
+        const datos = await respuesta.json().catch(() => ({}));
+        throw new Error(datos.error || `Error ${respuesta.status}`);
+      }
+
+      const lector = respuesta.body.getReader();
+      const decodificador = new TextDecoder();
+      let pendiente = "";
+      let final = null;
+
+      while (true) {
+        const { value, done } = await lector.read();
+        if (done) break;
+        pendiente += decodificador.decode(value, { stream: true });
+        const lineas = pendiente.split("\n");
+        pendiente = lineas.pop();
+        for (const linea of lineas) {
+          if (!linea.trim()) continue;
+          const evento = JSON.parse(linea);
+          if (evento.error) throw new Error(evento.error);
+          if (evento.t) {
+            acumulado += evento.t;
+            burbuja.innerHTML = formatear(acumulado);
+            chat.scrollTop = chat.scrollHeight;
+          }
+          if (evento.fin) final = evento.texto;
+        }
+      }
+
+      if (final === null) throw new Error("La respuesta se cortó. Inténtalo de nuevo.");
+      burbuja.innerHTML = formatear(final);
+      historial.push({ rol: "asistente", texto: final });
+    } catch (error) {
+      // Se deshace el mensaje para que el usuario pueda reintentarlo.
+      burbuja.remove();
+      burbujaUsuario.remove();
+      historial.pop();
+      mostrarError(error.message || "No se pudo enviar el mensaje.");
+      entrada.value = texto;
+      if (foto) ponerFoto(foto);
+      ajustarAltura();
+    } finally {
+      ocupado = false;
+      boton.disabled = false;
+      botonFoto.disabled = false;
+      chat.scrollTop = chat.scrollHeight;
+      entrada.focus();
+    }
+  }
+
+  formulario.addEventListener("submit", (e) => { e.preventDefault(); enviar(entrada.value); });
+  entrada.addEventListener("input", ajustarAltura);
+  entrada.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(entrada.value); }
+  });
+  sugerencias.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    if (chip.dataset.accion === "foto") {
+      e.stopPropagation();
+      abrirMenu();
+    } else {
+      enviar(chip.textContent);
+    }
+  });
+
+  botonFoto.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menuFoto.classList.contains("visible") ? cerrarMenu() : abrirMenu();
+  });
+  document.addEventListener("click", (e) => { if (!menuFoto.contains(e.target)) cerrarMenu(); });
+  document.getElementById("opcionCamara").addEventListener("click", tomarFoto);
+  document.getElementById("opcionGaleria").addEventListener("click", () => { cerrarMenu(); archivoGaleria.click(); });
+  archivoCamara.addEventListener("change", alElegirArchivo);
+  archivoGaleria.addEventListener("change", alElegirArchivo);
+  document.getElementById("quitarFoto").addEventListener("click", quitarFoto);
+  document.getElementById("disparar").addEventListener("click", disparar);
+  document.getElementById("cancelarCamara").addEventListener("click", cerrarCamara);
+
+  // La bienvenida solo se muestra; no se envía a la API como parte del historial.
+  agregarBurbuja("asistente", BIENVENIDA);
+  entrada.focus();
+</script>
+</body>
+</html>

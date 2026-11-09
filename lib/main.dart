@@ -1,7 +1,14 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'features/home/home_screen.dart';
 
-void main() {
+import 'core/theme/app_theme.dart';
+import 'features/assistant/screens/chat_screen.dart';
+import 'features/home/home_screen.dart';
+import 'firebase_options.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SESWearApp());
 }
 
@@ -13,6 +20,7 @@ class SESWearApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SES Wear',
+      theme: AppTheme.lightTheme,
       home: const MainNavigation(),
     );
   }
@@ -32,6 +40,7 @@ class _MainNavigationState extends State<MainNavigation> {
     const HomeScreen(),
     const Placeholder(),
     const Placeholder(),
+    const ChatScreen(),
     const Placeholder(),
   ];
 
@@ -64,6 +73,11 @@ class _MainNavigationState extends State<MainNavigation> {
             icon: Icon(Icons.style_outlined),
             selectedIcon: Icon(Icons.style),
             label: 'Outfits',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.auto_awesome_outlined),
+            selectedIcon: Icon(Icons.auto_awesome),
+            label: 'Asistente',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
