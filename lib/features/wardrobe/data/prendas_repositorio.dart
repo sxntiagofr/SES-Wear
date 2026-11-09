@@ -17,6 +17,17 @@ class ResultadoIdentificacion {
   final Prenda prenda;
 }
 
+/// Foto sin fondo que devuelve remove.bg.
+class ResultadoFondo {
+  const ResultadoFondo({required this.foto, required this.tipo, this.fotosGratisRestantes});
+
+  final Uint8List foto;
+  final String tipo;
+
+  /// Fotos gratis que le quedan a la app este mes (null si no se pudo consultar).
+  final int? fotosGratisRestantes;
+}
+
 /// Acceso a las prendas del armario: IA (Cloud Function), Firestore y Storage.
 class PrendasRepositorio {
   PrendasRepositorio({
@@ -52,6 +63,27 @@ class PrendasRepositorio {
     return ResultadoIdentificacion(
       esPrenda: datos['esPrenda'] != false,
       prenda: Prenda.desdeIA(datos),
+    );
+  }
+
+  /// Quita el fondo de la foto con remove.bg (Cloud Function `quitarFondo`).
+  /// Devuelve un PNG con fondo transparente. Gasta 1 de las 50 fotos gratis al mes.
+  Future<ResultadoFondo> quitarFondo(Uint8List foto, {String tipo = 'image/jpeg'}) async {
+    await Sesion.uid();
+    final resultado = await _functions
+        .httpsCallable(
+          'quitarFondo',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+        )
+        .call({
+      'imagen': {'tipo': tipo, 'datos': base64Encode(foto)},
+    });
+    final datos = Map<String, dynamic>.from(resultado.data as Map);
+    final imagen = Map<String, dynamic>.from(datos['imagen'] as Map);
+    return ResultadoFondo(
+      foto: base64Decode(imagen['datos'] as String),
+      tipo: (imagen['tipo'] as String?) ?? 'image/png',
+      fotosGratisRestantes: (datos['fotosGratisRestantes'] as num?)?.toInt(),
     );
   }
 

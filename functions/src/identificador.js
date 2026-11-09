@@ -53,7 +53,7 @@ const ESQUEMA = {
   ],
 };
 
-function validarImagen(imagen) {
+export function validarImagen(imagen) {
   if (!imagen || typeof imagen.datos !== "string" || !TIPOS_IMAGEN.includes(imagen.tipo)) {
     throw new ErrorDeEntrada("La foto debe ser JPG, PNG, WEBP o HEIC.");
   }

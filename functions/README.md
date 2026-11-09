@@ -11,6 +11,7 @@ También recibe **fotos de prendas**: el usuario toma una foto (o la elige de la
 | `src/asistente.js` | Lógica del asistente: instrucciones, validación del historial y llamada a la API. No depende de Firebase. |
 | `index.js` | Cloud Function `chat` que llama la app Flutter. Usa `src/asistente.js` y `src/datos.js`. |
 | `src/identificador.js` | Identificación de prendas desde una foto (Cloud Function `identificarPrenda`). |
+| `src/fondo.js` | Quitar el fondo de la foto con remove.bg (Cloud Function `quitarFondo`). |
 | `src/datos.js` | Conexión con Firestore: lee el perfil y las prendas del usuario y guarda el historial de conversaciones. |
 | `servidor-prueba.js` | Servidor local para probar el chat en el navegador, sin Firebase. |
 | `prueba/index.html` | Interfaz de prueba del chat, con la estética de la app. |
@@ -157,7 +158,18 @@ Cloud Function aparte del chat, que usa la pantalla **Agregar prenda** del armar
 
 Para probarla en tu PC sin Firebase: `npm run prueba` y envía un `POST` a `http://localhost:3000/api/identificar` con el mismo JSON de entrada.
 
-Quitar el fondo de la foto sigue pendiente: falta elegir el servicio.
+## Quitar el fondo (`quitarFondo`)
+
+Cloud Function que usa la API de **remove.bg** (`src/fondo.js`). La app la llama solo cuando el usuario toca **"Quitar fondo"** en "Agregar prenda".
+
+- **Entrada**: `{ "imagen": { "tipo": "image/jpeg", "datos": "<base64>" } }` (JPG, PNG o WEBP).
+- **Salida**: `{ "imagen": { "tipo": "image/png", "datos": "<base64>" }, "creditosUsados": 0.25, "fotosGratisRestantes": 41 }`.
+- API key en Secret Manager: `firebase functions:secrets:set REMOVE_BG_API_KEY` (en tu PC, en `.secret.local`).
+- Plan gratuito: **50 fotos al mes** para toda la app, en tamaño *preview* (hasta 0,25 MP).
+- Prueba local: `POST http://localhost:3000/api/quitar-fondo`.
+- remove.bg anunció que el 1 de diciembre de 2026 pasa a Leonardo.Ai. Si la API deja de funcionar, la app avisa y guarda la foto original.
+
+Cupos y fechas de todos los servicios gratuitos: [`docs/limites-gratuitos.md`](../docs/limites-gratuitos.md).
 
 ### Conexión con la base de datos
 

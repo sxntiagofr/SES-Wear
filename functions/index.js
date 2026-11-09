@@ -11,6 +11,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { responder, describirError, ErrorDeEntrada } from "./src/asistente.js";
 import { cargarContextoUsuario, guardarIntercambio } from "./src/datos.js";
 import { identificarPrenda as identificar } from "./src/identificador.js";
+import { quitarFondo as quitarFondoRemoveBg, ErrorFondo } from "./src/fondo.js";
 
 initializeApp();
 const db = getFirestore();
@@ -18,6 +19,8 @@ const db = getFirestore();
 // La API key de Gemini vive en Secret Manager de Firebase, nunca en el código ni en la app.
 // Se configura una sola vez con: firebase functions:secrets:set GEMINI_API_KEY
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+// API key de remove.bg (quitar el fondo de las fotos): firebase functions:secrets:set REMOVE_BG_API_KEY
+const REMOVE_BG_API_KEY = defineSecret("REMOVE_BG_API_KEY");
 
 export const chat = onCall(
   { secrets: [GEMINI_API_KEY], timeoutSeconds: 120 },
@@ -85,6 +88,32 @@ export const identificarPrenda = onCall(
       }
       logger.error("Error al identificar la prenda", error);
       throw new HttpsError("internal", describirError(error).mensaje);
+    }
+  },
+);
+
+// Quitar el fondo de la foto de una prenda (remove.bg). La app la llama solo cuando
+// el usuario toca "Quitar fondo", para no gastar el cupo gratuito (50 fotos al mes).
+// FirebaseFunctions.instance.httpsCallable('quitarFondo').call({'imagen': {'tipo': 'image/jpeg', 'datos': '<base64>'}})
+export const quitarFondo = onCall(
+  { secrets: [REMOVE_BG_API_KEY], timeoutSeconds: 60 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Debes iniciar sesión para quitar el fondo.");
+    }
+    try {
+      return await quitarFondoRemoveBg(request.data?.imagen, { apiKey: REMOVE_BG_API_KEY.value() });
+    } catch (error) {
+      if (error instanceof ErrorDeEntrada) {
+        throw new HttpsError("invalid-argument", error.message);
+      }
+      if (error instanceof ErrorFondo) {
+        logger.warn("remove.bg", error.message);
+        const codigo = error.estado === 429 ? "resource-exhausted" : error.estado === 400 ? "invalid-argument" : "unavailable";
+        throw new HttpsError(codigo, error.message);
+      }
+      logger.error("Error al quitar el fondo", error);
+      throw new HttpsError("internal", "Ocurrió un error inesperado al quitar el fondo.");
     }
   },
 );

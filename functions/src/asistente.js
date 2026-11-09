@@ -177,7 +177,11 @@ export function describirError(error) {
   }
   if (error instanceof ApiError) {
     if (error.status === 429) {
-      return { estado: 429, mensaje: "Se alcanzó el límite gratuito de Gemini por ahora. Espera un minuto e inténtalo de nuevo." };
+      // Cupo diario agotado (el error de Google menciona "PerDay"): se renueva a las 3:00 a. m. hora Colombia.
+      if (/per ?day|daily/i.test(error.message)) {
+        return { estado: 429, mensaje: "Se acabó el cupo gratuito de Gemini por hoy. Se renueva a las 3:00 a. m. (hora Colombia)." };
+      }
+      return { estado: 429, mensaje: "Se alcanzó el límite gratuito de Gemini por minuto. Espera un minuto e inténtalo de nuevo." };
     }
     if (error.status === 400 && /api key/i.test(error.message)) {
       return { estado: 500, mensaje: "La API key de Gemini no es válida. Revisa functions/.secret.local." };

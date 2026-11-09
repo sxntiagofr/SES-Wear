@@ -18,6 +18,7 @@ try {
 
 const { responder, describirError, MODELOS } = await import("./src/asistente.js");
 const { identificarPrenda } = await import("./src/identificador.js");
+const { quitarFondo } = await import("./src/fondo.js");
 
 const PUERTO = Number(process.env.PORT) || 3000;
 const PAGINA = path.join(aqui, "prueba", "index.html");
@@ -74,6 +75,20 @@ const servidor = http.createServer(async (req, res) => {
   if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     fs.createReadStream(PAGINA).pipe(res);
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/quitar-fondo") {
+    // Prueba de remove.bg: body { "imagen": { "tipo", "datos" } } → { imagen: { tipo: "image/png", datos } }.
+    try {
+      const { imagen } = JSON.parse(await leerCuerpo(req));
+      const resultado = await quitarFondo(imagen, { apiKey: process.env.REMOVE_BG_API_KEY });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(resultado));
+    } catch (error) {
+      console.error("[quitar-fondo]", error?.message ?? error);
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: error?.message ?? "Error al quitar el fondo." }));
+    }
     return;
   }
   if (req.method === "POST" && req.url === "/api/identificar") {

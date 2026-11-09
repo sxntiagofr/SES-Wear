@@ -98,6 +98,12 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
   bool _identificadaPorIA = false;
   String? _aviso;
 
+  // Foto que se va a guardar: la original o la versión sin fondo (PNG).
+  late Uint8List _foto = widget.foto;
+  late String _tipoFoto = widget.tipoImagen;
+  bool _sinFondo = false;
+  bool _quitandoFondo = false;
+
   @override
   void initState() {
     super.initState();
@@ -177,7 +183,7 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
       identificadaPorIA: _identificadaPorIA,
     );
     try {
-      await _repo.guardar(prenda, widget.foto, tipo: widget.tipoImagen);
+      await _repo.guardar(prenda, _foto, tipo: _tipoFoto);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('"${prenda.nombre}" se guardó en tu armario.')),
@@ -190,6 +196,59 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
         const SnackBar(content: Text('No se pudo guardar la prenda. Inténtalo de nuevo.')),
       );
     }
+  }
+
+  /// Quita el fondo con remove.bg. Gasta 1 de las 50 fotos gratis del mes,
+  /// por eso solo se hace cuando el usuario lo pide.
+  Future<void> _quitarFondo() async {
+    setState(() => _quitandoFondo = true);
+    String mensaje;
+    try {
+      final resultado = await _repo.quitarFondo(widget.foto, tipo: widget.tipoImagen);
+      if (!mounted) return;
+      setState(() {
+        _foto = resultado.foto;
+        _tipoFoto = resultado.tipo;
+        _sinFondo = true;
+      });
+      final restantes = resultado.fotosGratisRestantes;
+      mensaje = restantes == null
+          ? 'Listo, se quitó el fondo.'
+          : 'Listo, se quitó el fondo. Quedan $restantes fotos gratis este mes.';
+    } on FirebaseFunctionsException catch (e) {
+      mensaje = e.message ?? 'No se pudo quitar el fondo. Puedes guardar la foto original.';
+    } catch (_) {
+      mensaje = 'No se pudo quitar el fondo. Puedes guardar la foto original.';
+    }
+    if (!mounted) return;
+    setState(() => _quitandoFondo = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
+  }
+
+  void _restaurarFoto() {
+    setState(() {
+      _foto = widget.foto;
+      _tipoFoto = widget.tipoImagen;
+      _sinFondo = false;
+    });
+  }
+
+  Widget _botonFondo() {
+    final ocupado = _quitandoFondo || _guardando;
+    if (_sinFondo) {
+      return TextButton.icon(
+        onPressed: ocupado ? null : _restaurarFoto,
+        icon: const Icon(Icons.undo),
+        label: const Text('Usar foto original'),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: ocupado ? null : _quitarFondo,
+      icon: _quitandoFondo
+          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.auto_fix_high),
+      label: Text(_quitandoFondo ? 'Quitando fondo…' : 'Quitar fondo (50 fotos gratis al mes)'),
+    );
   }
 
   @override
@@ -206,16 +265,21 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
                 borderRadius: BorderRadius.circular(20),
                 child: AspectRatio(
                   aspectRatio: 1,
-                  child: Image.memory(widget.foto, fit: BoxFit.cover),
+                  child: ColoredBox(
+                    color: _sinFondo ? AppTheme.primaryLight : Colors.transparent,
+                    child: Image.memory(_foto, fit: _sinFondo ? BoxFit.contain : BoxFit.cover),
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              Center(child: _botonFondo()),
+              const SizedBox(height: 8),
               _estadoIA(),
               const SizedBox(height: 12),
               ..._campos(),
               const SizedBox(height: 20),
               FilledButton.icon(
-                onPressed: (_analizando || _guardando) ? null : _guardar,
+                onPressed: (_analizando || _guardando || _quitandoFondo) ? null : _guardar,
                 icon: _guardando
                     ? const SizedBox(
                         width: 18,

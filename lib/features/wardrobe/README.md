@@ -24,6 +24,12 @@ Las prendas guardadas aparecen en la cuadrícula del armario en tiempo real y el
 
 Si la IA falla o la foto no muestra ropa, la pantalla lo avisa y el usuario puede llenar los datos a mano.
 
+### Quitar el fondo (remove.bg)
+
+Debajo de la foto está el botón **"Quitar fondo"**. Llama a la Cloud Function `quitarFondo` (`functions/src/fondo.js`), que usa la API de remove.bg y devuelve un PNG con fondo transparente; se guarda ese PNG en lugar de la foto original. **"Usar foto original"** deshace el cambio.
+
+El plan gratuito da **50 fotos al mes para toda la app**, por eso solo se usa cuando el usuario lo pide. Ver [`docs/limites-gratuitos.md`](../../../docs/limites-gratuitos.md).
+
 ## Archivos
 
 | Archivo | Qué hace |
@@ -36,6 +42,7 @@ Si la IA falla o la foto no muestra ropa, la pantalla lo avisa y el usuario pued
 
 ## Pendiente
 
-- [ ] Quitar el fondo de la foto (falta elegir servicio: p. ej. remove.bg, o un modelo de Gemini que edite imágenes, que no tiene nivel gratuito).
+- [x] Quitar el fondo de la foto con remove.bg.
+- [ ] Cambiar de servicio para quitar el fondo antes del 1 de diciembre de 2026 (remove.bg pasa a Leonardo.Ai).
 - [ ] Editar una prenda ya guardada.
 - [ ] Filtros por color, estación, formalidad y tipo (RF-02).
