@@ -17,6 +17,7 @@ try {
 }
 
 const { responder, describirError, MODELOS } = await import("./src/asistente.js");
+const { identificarPrenda } = await import("./src/identificador.js");
 
 const PUERTO = Number(process.env.PORT) || 3000;
 const PAGINA = path.join(aqui, "prueba", "index.html");
@@ -73,6 +74,21 @@ const servidor = http.createServer(async (req, res) => {
   if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     fs.createReadStream(PAGINA).pipe(res);
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/identificar") {
+    // Prueba de la identificación de prendas: body { "imagen": { "tipo", "datos" } }.
+    try {
+      if (!process.env.GEMINI_API_KEY) throw new Error("Falta la API key en functions/.secret.local");
+      const { imagen } = JSON.parse(await leerCuerpo(req));
+      const prenda = await identificarPrenda(imagen, { apiKey: process.env.GEMINI_API_KEY });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(prenda));
+    } catch (error) {
+      console.error("[identificar]", error?.message ?? error);
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: describirError(error).mensaje }));
+    }
     return;
   }
   if (req.method === "POST" && req.url === "/api/chat") {

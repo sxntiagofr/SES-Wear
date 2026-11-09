@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'features/assistant/screens/chat_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/wardrobe/screens/armario_screen.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -38,7 +39,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const Placeholder(),
+    const ArmarioScreen(),
     const Placeholder(),
     const ChatScreen(),
     const Placeholder(),

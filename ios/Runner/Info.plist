@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>SES Wear usa la cámara para tomar fotos de tus prendas e identificarlas con IA.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SES Wear usa tus fotos para agregar prendas a tu armario.</string>
 </dict>
 </plist>

@@ -1,6 +1,7 @@
 // Cloud Functions de SES Wear.
 // La app Flutter llama a `chat` con el paquete cloud_functions:
 // FirebaseFunctions.instance.httpsCallable('chat').call({'mensajes': [...], 'conversacionId': '...'})
+// y a `identificarPrenda` desde la pantalla "Agregar prenda" del armario.
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
@@ -9,6 +10,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { responder, describirError, ErrorDeEntrada } from "./src/asistente.js";
 import { cargarContextoUsuario, guardarIntercambio } from "./src/datos.js";
+import { identificarPrenda as identificar } from "./src/identificador.js";
 
 initializeApp();
 const db = getFirestore();
@@ -62,5 +64,27 @@ export const chat = onCall(
     }
 
     return { ...respuesta, conversacionId };
+  },
+);
+
+// Identificación automática de prendas (RF-01): la app envía la foto que tomó el
+// usuario y recibe tipo, categoría, colores, tela, estilo, formalidad y estación
+// para llenar el formulario de "Agregar prenda".
+// FirebaseFunctions.instance.httpsCallable('identificarPrenda').call({'imagen': {'tipo': 'image/jpeg', 'datos': '<base64>'}})
+export const identificarPrenda = onCall(
+  { secrets: [GEMINI_API_KEY], timeoutSeconds: 60 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Debes iniciar sesión para identificar prendas.");
+    }
+    try {
+      return await identificar(request.data?.imagen, { apiKey: GEMINI_API_KEY.value() });
+    } catch (error) {
+      if (error instanceof ErrorDeEntrada) {
+        throw new HttpsError("invalid-argument", error.message);
+      }
+      logger.error("Error al identificar la prenda", error);
+      throw new HttpsError("internal", describirError(error).mensaje);
+    }
   },
 );
