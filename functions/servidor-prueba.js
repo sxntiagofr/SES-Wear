@@ -15,6 +15,10 @@ try {
 } catch {
   // Si no existe, se avisa al usuario cuando intente chatear.
 }
+// Si las claves siguen con el texto de la plantilla (PEGA_AQUI_...), se tratan como faltantes.
+for (const nombre of ["GEMINI_API_KEY", "REMOVE_BG_API_KEY"]) {
+  if (process.env[nombre]?.startsWith("PEGA_AQUI")) delete process.env[nombre];
+}
 
 const { responder, describirError, MODELOS } = await import("./src/asistente.js");
 const { identificarPrenda } = await import("./src/identificador.js");

@@ -37,6 +37,8 @@ La app usa primero `gemini-3.5-flash` y, si se acabó su cupo o está saturado, 
 
 ## Configuración de las API keys
 
+Las claves van en `functions/.secret.local` (plantilla: `functions/.secret.local.example`, campos `PEGA_AQUI_...`). Luego `scripts/configurar-claves.ps1` (Windows) o `scripts/configurar-claves.sh` las copia a Firebase y publica todo. A mano sería:
+
 ```bash
 firebase functions:secrets:set GEMINI_API_KEY      # https://aistudio.google.com/apikey
 firebase functions:secrets:set REMOVE_BG_API_KEY   # https://www.remove.bg/dashboard#api-key

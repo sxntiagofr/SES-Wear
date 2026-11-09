@@ -71,8 +71,8 @@ export async function quitarFondo(imagen, { apiKey } = {}) {
   if (!TIPOS_ACEPTADOS.includes(inlineData.mimeType)) {
     throw new ErrorDeEntrada("Para quitar el fondo la foto debe ser JPG, PNG o WEBP.");
   }
-  if (!apiKey) {
-    throw new ErrorFondo(500, "Falta la API key de remove.bg (REMOVE_BG_API_KEY).");
+  if (!apiKey || apiKey.startsWith("PEGA_AQUI")) {
+    throw new ErrorFondo(500, "Falta la API key de remove.bg: ponla en functions/.secret.local (REMOVE_BG_API_KEY).");
   }
 
   const extension = inlineData.mimeType.split("/")[1];

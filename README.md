@@ -98,7 +98,20 @@ flutter run
 
 1. En Firebase Console → **Authentication → Método de acceso**, activa **Anónimo** (mientras no exista la pantalla de inicio de sesión, la app entra de forma anónima para poder usar el asistente).
 2. El proyecto debe estar en el plan **Blaze** (las Cloud Functions que llaman APIs externas no funcionan en el plan Spark).
-3. Despliega reglas y funciones:
+3. Pon tus claves en `functions/.secret.local`: cópialo de `functions/.secret.local.example` y reemplaza cada `PEGA_AQUI_...` por tu clave. Ese archivo no se sube a GitHub.
+4. Corre el script, que guarda las claves en el gestor de secretos de Firebase y publica reglas y funciones:
+
+```powershell
+# Windows (desde la carpeta SES-Wear)
+powershell -ExecutionPolicy Bypass -File scripts\configurar-claves.ps1
+```
+
+```bash
+# macOS / Linux
+bash scripts/configurar-claves.sh
+```
+
+O, si prefieres hacerlo a mano:
 
 ```bash
 firebase login
