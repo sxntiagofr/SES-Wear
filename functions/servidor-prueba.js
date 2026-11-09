@@ -15,8 +15,14 @@ try {
 } catch {
   // Si no existe, se avisa al usuario cuando intente chatear.
 }
+// Si las claves siguen con el texto de la plantilla (PEGA_AQUI_...), se tratan como faltantes.
+for (const nombre of ["GEMINI_API_KEY", "REMOVE_BG_API_KEY"]) {
+  if (process.env[nombre]?.startsWith("PEGA_AQUI")) delete process.env[nombre];
+}
 
 const { responder, describirError, MODELOS } = await import("./src/asistente.js");
+const { identificarPrenda } = await import("./src/identificador.js");
+const { quitarFondo } = await import("./src/fondo.js");
 
 const PUERTO = Number(process.env.PORT) || 3000;
 const PAGINA = path.join(aqui, "prueba", "index.html");
@@ -73,6 +79,35 @@ const servidor = http.createServer(async (req, res) => {
   if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     fs.createReadStream(PAGINA).pipe(res);
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/quitar-fondo") {
+    // Prueba de remove.bg: body { "imagen": { "tipo", "datos" } } → { imagen: { tipo: "image/png", datos } }.
+    try {
+      const { imagen } = JSON.parse(await leerCuerpo(req));
+      const resultado = await quitarFondo(imagen, { apiKey: process.env.REMOVE_BG_API_KEY });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(resultado));
+    } catch (error) {
+      console.error("[quitar-fondo]", error?.message ?? error);
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: error?.message ?? "Error al quitar el fondo." }));
+    }
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/identificar") {
+    // Prueba de la identificación de prendas: body { "imagen": { "tipo", "datos" } }.
+    try {
+      if (!process.env.GEMINI_API_KEY) throw new Error("Falta la API key en functions/.secret.local");
+      const { imagen } = JSON.parse(await leerCuerpo(req));
+      const prenda = await identificarPrenda(imagen, { apiKey: process.env.GEMINI_API_KEY });
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(prenda));
+    } catch (error) {
+      console.error("[identificar]", error?.message ?? error);
+      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: describirError(error).mensaje }));
+    }
     return;
   }
   if (req.method === "POST" && req.url === "/api/chat") {

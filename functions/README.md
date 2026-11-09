@@ -10,6 +10,8 @@ También recibe **fotos de prendas**: el usuario toma una foto (o la elige de la
 |---|---|
 | `src/asistente.js` | Lógica del asistente: instrucciones, validación del historial y llamada a la API. No depende de Firebase. |
 | `index.js` | Cloud Function `chat` que llama la app Flutter. Usa `src/asistente.js` y `src/datos.js`. |
+| `src/identificador.js` | Identificación de prendas desde una foto (Cloud Function `identificarPrenda`). |
+| `src/fondo.js` | Quitar el fondo de la foto con remove.bg (Cloud Function `quitarFondo`). |
 | `src/datos.js` | Conexión con Firestore: lee el perfil y las prendas del usuario y guarda el historial de conversaciones. |
 | `servidor-prueba.js` | Servidor local para probar el chat en el navegador, sin Firebase. |
 | `prueba/index.html` | Interfaz de prueba del chat, con la estética de la app. |
@@ -124,6 +126,50 @@ if (foto != null) {
 ```
 
 `rechazado: true` significa que los filtros de seguridad de Gemini bloquearon la pregunta. En ese caso `texto` trae un mensaje amable para mostrar.
+
+## Identificación de prendas (`identificarPrenda`)
+
+Cloud Function aparte del chat, que usa la pantalla **Agregar prenda** del armario (`lib/features/wardrobe`). Lógica en `src/identificador.js`; usa los mismos modelos de Gemini y la misma API key que el asistente.
+
+**Entrada** (`data`): `{ "imagen": { "tipo": "image/jpeg", "datos": "<base64>" } }` (JPG, PNG, WEBP o HEIC; máximo 4 MB).
+
+**Salida** (Gemini responde con un esquema JSON fijo):
+
+```json
+{
+  "esPrenda": true,
+  "nombre": "Jean azul clásico",
+  "tipo": "inferior",
+  "categoria": "jean",
+  "colorPrimario": "azul",
+  "colorSecundario": "",
+  "tela": "denim",
+  "estilo": "clásico",
+  "formalidad": "casual",
+  "estacion": "todo el año",
+  "etiquetas": ["tiro alto", "bota recta"]
+}
+```
+
+- `tipo`: `superior`, `inferior`, `calzado`, `accesorio`, `enterizo` o `abrigo`.
+- `formalidad`: `casual`, `deportivo`, `semiformal`, `formal` o `fiesta`.
+- `estacion`: `calor`, `frío`, `lluvia` o `todo el año`.
+- `esPrenda: false` si la foto no muestra ropa, calzado ni accesorios.
+
+Para probarla en tu PC sin Firebase: `npm run prueba` y envía un `POST` a `http://localhost:3000/api/identificar` con el mismo JSON de entrada.
+
+## Quitar el fondo (`quitarFondo`)
+
+Cloud Function que usa la API de **remove.bg** (`src/fondo.js`). La app la llama solo cuando el usuario toca **"Quitar fondo"** en "Agregar prenda".
+
+- **Entrada**: `{ "imagen": { "tipo": "image/jpeg", "datos": "<base64>" } }` (JPG, PNG o WEBP).
+- **Salida**: `{ "imagen": { "tipo": "image/png", "datos": "<base64>" }, "creditosUsados": 0.25, "fotosGratisRestantes": 41 }`.
+- API key en Secret Manager: `firebase functions:secrets:set REMOVE_BG_API_KEY` (en tu PC, en `.secret.local`).
+- Plan gratuito: **50 fotos al mes** para toda la app, en tamaño *preview* (hasta 0,25 MP).
+- Prueba local: `POST http://localhost:3000/api/quitar-fondo`.
+- remove.bg anunció que el 1 de diciembre de 2026 pasa a Leonardo.Ai. Si la API deja de funcionar, la app avisa y guarda la foto original.
+
+Cupos y fechas de todos los servicios gratuitos: [`docs/limites-gratuitos.md`](../docs/limites-gratuitos.md).
 
 ### Conexión con la base de datos
 

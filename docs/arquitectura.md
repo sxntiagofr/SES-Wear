@@ -25,7 +25,7 @@ users/{uid}
   │     nombre, categoria, tipo (superior | inferior | calzado | accesorio),
   │     colorPrimario, colorSecundario, tela, estilo, talla, marca,
   │     estacion, formalidad, precio, vecesUsada, ultimoUso,
-  │     fotoUrl, etiquetas[], fechaCreacion
+  │     fotoUrl, etiquetas[], fechaCreacion, identificadaPorIA
   │
   ├── outfits/{outfitId}
   │     nombre, prendaIds[], ocasion, favorito, calificacion, fechaCreacion

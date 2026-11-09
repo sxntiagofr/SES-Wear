@@ -22,7 +22,8 @@ Proyecto académico — Universidad Militar Nueva Granada, MUL B, 2026.
 | Autenticación | Firebase Authentication |
 | Base de datos | Cloud Firestore |
 | Archivos (fotos de prendas) | Firebase Storage |
-| Chatbot de moda | Gemini (Google) desde Cloud Functions (`functions/`) |
+| Chatbot de moda e identificación de prendas | Gemini (Google) desde Cloud Functions (`functions/`) |
+| Quitar el fondo de las fotos | remove.bg desde Cloud Functions (`functions/src/fondo.js`) |
 | IA de visión (identificación de prendas) | _por definir_ |
 
 Localización: `es-CO` (ISO 639-1 / ISO 3166-1), preparada para escalar a `es-MX`, `es-AR`, etc.
@@ -97,16 +98,32 @@ flutter run
 
 1. En Firebase Console → **Authentication → Método de acceso**, activa **Anónimo** (mientras no exista la pantalla de inicio de sesión, la app entra de forma anónima para poder usar el asistente).
 2. El proyecto debe estar en el plan **Blaze** (las Cloud Functions que llaman APIs externas no funcionan en el plan Spark).
-3. Despliega reglas y funciones:
+3. Pon tus claves en `functions/.secret.local`: cópialo de `functions/.secret.local.example` y reemplaza cada `PEGA_AQUI_...` por tu clave. Ese archivo no se sube a GitHub.
+4. Corre el script, que guarda las claves en el gestor de secretos de Firebase y publica reglas y funciones:
+
+```powershell
+# Windows (desde la carpeta SES-Wear)
+powershell -ExecutionPolicy Bypass -File scripts\configurar-claves.ps1
+```
+
+```bash
+# macOS / Linux
+bash scripts/configurar-claves.sh
+```
+
+O, si prefieres hacerlo a mano:
 
 ```bash
 firebase login
 firebase functions:secrets:set GEMINI_API_KEY   # pegar la API key de Google AI Studio
+firebase functions:secrets:set REMOVE_BG_API_KEY # pegar la API key de remove.bg
 cd functions && npm install && cd ..
 firebase deploy --only firestore:rules,firestore:indexes,storage,functions
 ```
 
 Para probar el chat sin Firebase, en el navegador, ver [`functions/README.md`](functions/README.md).
+
+**Cupos gratuitos** (mensajes del chat, fotos identificadas y fotos sin fondo) y hasta cuándo funcionan: ver [`docs/limites-gratuitos.md`](docs/limites-gratuitos.md).
 
 ## Flujo de trabajo
 
