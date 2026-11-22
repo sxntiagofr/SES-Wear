@@ -1,7 +1,13 @@
 rules_version = '2';
 
-// Cada usuario solo puede leer y escribir sus propios datos:
-// users/{uid} y todas sus subcolecciones (prendas, outfits, colecciones, planificador).
+// Reglas de Cloud Firestore de SES Wear.
+// Estructura completa de la base de datos en docs/base-de-datos.md.
+//
+// - Cada usuario solo puede leer y escribir sus propios datos: users/{uid} y
+//   todas sus subcolecciones (prendas, outfits, conversaciones, planificador...).
+// - Nadie puede darse a sí mismo el rol de administrador: el campo `rol` nace
+//   como "usuario" y solo lo cambia el Admin SDK (servidor).
+// - Todo lo demás queda bloqueado por defecto.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -9,15 +15,51 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    match /users/{uid} {
-      allow read, write: if isOwner(uid);
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
 
-      match /{subcollection=**} {
+    // Campos que la app puede escribir en el perfil.
+    function camposPerfilValidos() {
+      return request.resource.data.keys().hasOnly([
+        'email', 'nombre', 'apellido', 'telefono', 'ciudad', 'fotoUrl',
+        'proveedor', 'rol', 'locale', 'preferencias', 'consentimientoDatos',
+        'fechaRegistro', 'ultimoAcceso'
+      ]);
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid)
+                    && camposPerfilValidos()
+                    && request.resource.data.get('rol', 'usuario') == 'usuario';
+
+      allow update: if isOwner(uid)
+                    && camposPerfilValidos()
+                    && request.resource.data.get('rol', 'usuario') == resource.data.get('rol', 'usuario')
+                    && request.resource.data.get('fechaRegistro', null) == resource.data.get('fechaRegistro', null);
+
+      // Derecho de supresión (Ley 1581 de 2012).
+      allow delete: if isOwner(uid);
+
+      match /{subcoleccion=**} {
         allow read, write: if isOwner(uid);
       }
     }
 
-    // Todo lo demás queda bloqueado por defecto.
+    // Catálogo global de categorías y parámetros del sistema (RF-08):
+    // cualquier usuario con sesión los lee; solo el administrador los cambia.
+    match /categorias/{id} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    match /parametros/{id} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

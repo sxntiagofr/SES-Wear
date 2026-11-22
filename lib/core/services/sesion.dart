@@ -2,17 +2,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// Sesión del usuario actual.
 ///
-/// Mientras no exista la pantalla de inicio de sesión (módulo `auth`), si no hay
-/// usuario se entra de forma anónima. Requiere activar "Anónimo" en
-/// Firebase Console → Authentication → Método de acceso.
+/// La app solo muestra las pantallas internas cuando hay una cuenta con sesión
+/// iniciada (ver `features/auth/screens/auth_gate.dart`), así que aquí siempre
+/// debería existir un usuario. Ya no se entra de forma anónima.
 class Sesion {
   Sesion._();
 
   static Future<String> uid([FirebaseAuth? auth]) async {
-    final instancia = auth ?? FirebaseAuth.instance;
-    final actual = instancia.currentUser;
-    if (actual != null) return actual.uid;
-    final credencial = await instancia.signInAnonymously();
-    return credencial.user!.uid;
+    final actual = (auth ?? FirebaseAuth.instance).currentUser;
+    if (actual == null || actual.isAnonymous) {
+      throw FirebaseAuthException(
+        code: 'no-session',
+        message: 'Debes iniciar sesión para usar esta función.',
+      );
+    }
+    return actual.uid;
   }
 }
