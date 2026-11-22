@@ -1,0 +1,21 @@
+{
+  "name": "ses-wear-functions",
+  "description": "Cloud Functions de SES Wear: asistente de moda con IA",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "prueba": "node servidor-prueba.js",
+    "emulador": "firebase emulators:start --only functions",
+    "desplegar": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "@google/genai": "^2.32.0",
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0"
+  }
+}

@@ -49,3 +49,29 @@ app.*.map.json
 
 README.flutter.backup.md
 README.github.backup.md
+
+# --- Firebase ---
+.firebase/
+*-service-account*.json
+serviceAccountKey.json
+
+# --- Node (Cloud Functions del asistente) ---
+node_modules/
+functions/lib/
+
+# --- Secretos y entorno (API key de Gemini, etc.) ---
+.env
+.env.*
+!.env.example
+.secret.local
+*.local
+
+# --- Android: llaves de firma ---
+android/key.properties
+*.jks
+*.keystore
+
+# --- Sistema operativo / Office ---
+Thumbs.db
+desktop.ini
+~$*
