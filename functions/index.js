@@ -1,106 +1,58 @@
 // Cloud Functions de SES Wear.
-// La app Flutter llama a `chat` con el paquete cloud_functions:
-// FirebaseFunctions.instance.httpsCallable('chat').call({'mensajes': [...], 'conversacionId': '...'})
-// y a `identificarPrenda` desde la pantalla "Agregar prenda" del armario.
+// La IA (asistente, identificar prendas e ideas de outfits) corre en la app con
+// Firebase AI Logic; aquí solo queda lo que necesita un servidor:
+// - quitarFondo     foto sin fondo con remove.bg (la API key no puede ir en la app)
+// - eliminarCuenta  borra la cuenta y todos sus datos (Ley 1581)
+// La app las llama con FirebaseFunctions.instance.httpsCallable(nombre).
+// (src/asistente.js, src/identificador.js y src/outfits.js siguen sirviendo al
+// servidor de prueba local: npm run prueba.)
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { responder, describirError, ErrorDeEntrada } from "./src/asistente.js";
-import { cargarContextoUsuario, guardarIntercambio } from "./src/datos.js";
-import { identificarPrenda as identificar } from "./src/identificador.js";
+import { getStorage } from "firebase-admin/storage";
+import { getAuth } from "firebase-admin/auth";
+import { ErrorDeEntrada } from "./src/asistente.js";
 import { quitarFondo as quitarFondoRemoveBg, ErrorFondo } from "./src/fondo.js";
+import { consumirCupo, ErrorDeLimite } from "./src/limites.js";
+import { eliminarDatosDeUsuario } from "./src/cuenta.js";
 
 initializeApp();
 const db = getFirestore();
 
-// La API key de Gemini vive en Secret Manager de Firebase, nunca en el código ni en la app.
-// Se configura una sola vez con: firebase functions:secrets:set GEMINI_API_KEY
-const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
-// API key de remove.bg (quitar el fondo de las fotos): firebase functions:secrets:set REMOVE_BG_API_KEY
+// La API key de remove.bg vive en Secret Manager de Firebase, nunca en el código
+// ni en la app. Se configura con scripts/configurar-claves (o firebase functions:secrets:set).
 const REMOVE_BG_API_KEY = defineSecret("REMOVE_BG_API_KEY");
 
-export const chat = onCall(
-  { secrets: [GEMINI_API_KEY], timeoutSeconds: 120 },
-  async (request, response) => {
-    // Solo usuarios con sesión iniciada en la app pueden usar el asistente,
-    // para que nadie más gaste la API key.
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Debes iniciar sesión para usar el asistente.");
-    }
-    const uid = request.auth.uid;
-    const mensajes = request.data?.mensajes;
+// App Check: cuando la app ya esté registrada en Firebase Console → App Check
+// (Play Integrity / App Attest), poner EXIGIR_APP_CHECK=true en functions/.env
+// para rechazar llamadas que no vengan de la app oficial.
+const EXIGIR_APP_CHECK = process.env.EXIGIR_APP_CHECK === "true";
 
-    // 1. Base de datos → asistente: perfil y prendas del armario del usuario.
-    let contexto = "";
-    try {
-      contexto = await cargarContextoUsuario(db, uid);
-    } catch (error) {
-      logger.warn("No se pudo leer el armario del usuario; se responde sin él", error);
-    }
+// Verifica sesión (y App Check si está activo) y descuenta un uso del cupo diario.
+async function autorizar(request, funcion, mensajeSinSesion) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", mensajeSinSesion);
+  }
+  if (EXIGIR_APP_CHECK && !request.app) {
+    throw new HttpsError("failed-precondition", "Esta solicitud no viene de la app oficial de SES Wear.");
+  }
+  try {
+    await consumirCupo(db, request.auth.uid, funcion);
+  } catch (error) {
+    if (error instanceof ErrorDeLimite) throw new HttpsError("resource-exhausted", error.message);
+    // Si el contador falla, no se bloquea al usuario.
+    logger.warn("No se pudo registrar el uso", error);
+  }
+  return request.auth.uid;
+}
 
-    // 2. Respuesta de Gemini.
-    let respuesta;
-    try {
-      respuesta = await responder(mensajes, {
-        apiKey: GEMINI_API_KEY.value(),
-        contexto,
-        // Si la app pide la respuesta en vivo, se envía por fragmentos.
-        alTexto: request.acceptsStreaming ? (texto) => response.sendChunk(texto) : undefined,
-      });
-    } catch (error) {
-      if (error instanceof ErrorDeEntrada) {
-        throw new HttpsError("invalid-argument", error.message);
-      }
-      logger.error("Error en el asistente", error);
-      throw new HttpsError("internal", describirError(error).mensaje);
-    }
-
-    // 3. Asistente → base de datos: se guarda el intercambio en el historial.
-    let conversacionId = request.data?.conversacionId ?? null;
-    try {
-      conversacionId = await guardarIntercambio(db, uid, { conversacionId, mensajes, respuesta });
-    } catch (error) {
-      logger.error("No se pudo guardar la conversación", error);
-    }
-
-    return { ...respuesta, conversacionId };
-  },
-);
-
-// Identificación automática de prendas (RF-01): la app envía la foto que tomó el
-// usuario y recibe tipo, categoría, colores, tela, estilo, formalidad y estación
-// para llenar el formulario de "Agregar prenda".
-// FirebaseFunctions.instance.httpsCallable('identificarPrenda').call({'imagen': {'tipo': 'image/jpeg', 'datos': '<base64>'}})
-export const identificarPrenda = onCall(
-  { secrets: [GEMINI_API_KEY], timeoutSeconds: 60 },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Debes iniciar sesión para identificar prendas.");
-    }
-    try {
-      return await identificar(request.data?.imagen, { apiKey: GEMINI_API_KEY.value() });
-    } catch (error) {
-      if (error instanceof ErrorDeEntrada) {
-        throw new HttpsError("invalid-argument", error.message);
-      }
-      logger.error("Error al identificar la prenda", error);
-      throw new HttpsError("internal", describirError(error).mensaje);
-    }
-  },
-);
-
-// Quitar el fondo de la foto de una prenda (remove.bg). La app la llama solo cuando
-// el usuario toca "Quitar fondo", para no gastar el cupo gratuito (50 fotos al mes).
-// FirebaseFunctions.instance.httpsCallable('quitarFondo').call({'imagen': {'tipo': 'image/jpeg', 'datos': '<base64>'}})
 export const quitarFondo = onCall(
   { secrets: [REMOVE_BG_API_KEY], timeoutSeconds: 60 },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Debes iniciar sesión para quitar el fondo.");
-    }
+    await autorizar(request, "quitarFondo", "Debes iniciar sesión para quitar el fondo.");
     try {
       return await quitarFondoRemoveBg(request.data?.imagen, { apiKey: REMOVE_BG_API_KEY.value() });
     } catch (error) {
@@ -117,3 +69,23 @@ export const quitarFondo = onCall(
     }
   },
 );
+
+// Borra la cuenta y todos los datos del usuario (Perfil → Eliminar cuenta).
+export const eliminarCuenta = onCall({ timeoutSeconds: 300 }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Debes iniciar sesión para eliminar tu cuenta.");
+  }
+  if (request.data?.confirmacion !== "ELIMINAR") {
+    throw new HttpsError("invalid-argument", "Falta la confirmación para eliminar la cuenta.");
+  }
+  try {
+    await eliminarDatosDeUsuario(
+      { db, bucket: getStorage().bucket(), auth: getAuth(), logger },
+      request.auth.uid,
+    );
+    return { eliminada: true };
+  } catch (error) {
+    logger.error("Error al eliminar la cuenta", error);
+    throw new HttpsError("internal", "No se pudo eliminar la cuenta. Inténtalo de nuevo más tarde.");
+  }
+});
