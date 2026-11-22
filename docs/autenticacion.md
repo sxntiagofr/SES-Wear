@@ -1,5 +1,7 @@
 # Autenticación (RF-01.1)
 
+> **Actualización:** el inicio de sesión con Google y Facebook se retiró de la app. Solo queda correo y contraseña; las secciones de Google y Facebook de este documento quedan como referencia histórica.
+
 Módulo `lib/features/auth/`. Cubre:
 
 | Función | Pantalla | Firebase |
