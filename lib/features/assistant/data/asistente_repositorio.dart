@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/services/sesion.dart';
 import '../models/mensaje.dart';
 
 /// Respuesta de la Cloud Function `chat`.
@@ -36,16 +37,8 @@ class AsistenteRepositorio {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
 
-  /// El asistente necesita un usuario con sesión iniciada.
-  /// Mientras no exista la pantalla de inicio de sesión (módulo `auth`),
-  /// se entra de forma anónima. Requiere activar "Anónimo" en
-  /// Firebase Console → Authentication → Método de acceso.
-  Future<String> _uid() async {
-    final actual = _auth.currentUser;
-    if (actual != null) return actual.uid;
-    final credencial = await _auth.signInAnonymously();
-    return credencial.user!.uid;
-  }
+  /// El asistente necesita un usuario con sesión iniciada (módulo `auth`).
+  Future<String> _uid() => Sesion.uid(_auth);
 
   Future<CollectionReference<Map<String, dynamic>>> _conversaciones() async {
     final uid = await _uid();

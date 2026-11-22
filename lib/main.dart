@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/assistant/screens/chat_screen.dart';
+import 'features/auth/screens/auth_gate.dart';
 import 'features/home/home_screen.dart';
+import 'features/profile/screens/perfil_screen.dart';
 import 'features/wardrobe/screens/armario_screen.dart';
 import 'firebase_options.dart';
 
@@ -21,8 +23,9 @@ class SESWearApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SES Wear',
-      theme: AppTheme.lightTheme,
-      home: const MainNavigation(),
+      theme: AppTheme.theme,
+      // Sin sesión muestra Iniciar sesión; con sesión, la app.
+      home: const AuthGate(app: MainNavigation()),
     );
   }
 }
@@ -42,7 +45,7 @@ class _MainNavigationState extends State<MainNavigation> {
     const ArmarioScreen(),
     const Placeholder(),
     const ChatScreen(),
-    const Placeholder(),
+    const PerfilScreen(),
   ];
 
   @override
