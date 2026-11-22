@@ -1,6 +1,6 @@
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../../../core/ia/servicio_ia.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/asistente_repositorio.dart';
 import '../models/mensaje.dart';
@@ -56,7 +56,9 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final id = await _repo.ultimaConversacionId();
       final mensajes = id == null ? <Mensaje>[] : await _repo.cargarMensajes(id);
-      if (!mounted) return;
+      // Si el usuario ya empezó una conversación mientras cargaba el historial,
+      // se conserva la suya en vez de reemplazarla por la anterior.
+      if (!mounted || _mensajes.isNotEmpty || _conversacionId != null) return;
       setState(() {
         _conversacionId = id;
         _mensajes
@@ -97,8 +99,8 @@ class _ChatScreenState extends State<ChatScreen> {
           fecha: DateTime.now(),
         ));
       });
-    } on FirebaseFunctionsException catch (e) {
-      _fallo(e.message ?? 'El asistente no está disponible en este momento.');
+    } on ErrorIA catch (e) {
+      _fallo(e.mensaje);
     } catch (_) {
       _fallo('No se pudo conectar con el asistente. Revisa tu conexión.');
     } finally {
@@ -158,7 +160,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Text(_error!, style: const TextStyle(color: AppTheme.error)),
+                child: Text(_error!, style: TextStyle(color: AppTheme.error)),
               ),
             _campoDeTexto(),
           ],
@@ -168,7 +170,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _cuerpo() {
-    if (_cargando) {
+    if (_cargando && _mensajes.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_mensajes.isEmpty) {
@@ -178,7 +180,7 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(height: 24),
           const Icon(Icons.auto_awesome, size: 48, color: AppTheme.primary),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Pregúntame qué ponerte. Conozco las prendas de tu armario.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
