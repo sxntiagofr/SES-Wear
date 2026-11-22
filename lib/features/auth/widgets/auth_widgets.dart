@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/boton_degradado.dart';
 
 /// Logo de SES Wear con el eslogan, en tarjeta redondeada (como en Figma).
 class LogoSesWear extends StatelessWidget {
-  const LogoSesWear({super.key, this.alto = 300});
+  const LogoSesWear({super.key, this.alto = 160});
 
   final double alto;
 
@@ -16,7 +17,8 @@ class LogoSesWear extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         height: alto,
-        width: double.infinity,
+        // Mismas proporciones de la imagen (432 × 492): el logo no se estira.
+        width: alto * 432 / 492,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -82,7 +84,7 @@ class _CampoAuthState extends State<CampoAuth> {
       enableSuggestions: !widget.esContrasena,
       validator: widget.validator,
       onFieldSubmitted: widget.onSubmitted,
-      style: const TextStyle(color: AppTheme.textPrimary),
+      style: TextStyle(color: AppTheme.textPrimary),
       decoration: InputDecoration(
         hintText: widget.hint,
         prefixIcon: Icon(widget.icono, size: 22),
@@ -111,117 +113,10 @@ class BotonPrincipal extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool cargando;
 
+  // Mismo degradado rosa → lila que los botones principales del diseño.
   @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppTheme.radioBoton),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: FilledButton(
-        onPressed: cargando ? null : onPressed,
-        child: cargando
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-              )
-            : Text(texto),
-      ),
-    );
-  }
-}
-
-/// Línea con texto en el medio: «o continúa con».
-class SeparadorTexto extends StatelessWidget {
-  const SeparadorTexto(this.texto, {super.key});
-
-  final String texto;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider()),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(texto, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-        ),
-        const Expanded(child: Divider()),
-      ],
-    );
-  }
-}
-
-/// Botones redondos de Google y Facebook.
-class BotonesSociales extends StatelessWidget {
-  const BotonesSociales({
-    super.key,
-    required this.onGoogle,
-    required this.onFacebook,
-    this.deshabilitados = false,
-  });
-
-  final VoidCallback onGoogle;
-  final VoidCallback onFacebook;
-  final bool deshabilitados;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _BotonCircular(
-          etiqueta: 'Continuar con Google',
-          onPressed: deshabilitados ? null : onGoogle,
-          child: const Text(
-            'G',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
-          ),
-        ),
-        const SizedBox(width: 24),
-        _BotonCircular(
-          etiqueta: 'Continuar con Facebook',
-          onPressed: deshabilitados ? null : onFacebook,
-          child: const Icon(Icons.facebook, color: Colors.white, size: 28),
-        ),
-      ],
-    );
-  }
-}
-
-class _BotonCircular extends StatelessWidget {
-  const _BotonCircular({required this.etiqueta, required this.onPressed, required this.child});
-
-  final String etiqueta;
-  final VoidCallback? onPressed;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: etiqueta,
-      child: Semantics(
-        button: true,
-        label: etiqueta,
-        child: Material(
-          color: AppTheme.surface,
-          shape: const CircleBorder(side: BorderSide(color: AppTheme.border)),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onPressed,
-            child: SizedBox(width: 48, height: 48, child: Center(child: child)),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      BotonDegradado(texto: texto, onPressed: onPressed, cargando: cargando, alto: 54, tamanoTexto: 16);
 }
 
 /// «¿No tienes cuenta? Regístrate» y similares.
@@ -239,7 +134,7 @@ class EnlaceInferior extends StatelessWidget {
       alignment: WrapAlignment.center,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(pregunta, style: const TextStyle(color: AppTheme.textSecondary)),
+        Text(pregunta, style: TextStyle(color: AppTheme.textSecondary)),
         TextButton(
           onPressed: onTap,
           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
@@ -254,7 +149,8 @@ class EnlaceInferior extends StatelessWidget {
 class Validar {
   Validar._();
 
-  static final _correo = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
+  // usuario@dominio.tld, con subdominios opcionales y sin puntos seguidos.
+  static final _correo = RegExp(r'^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[^\s@.]{2,}$');
 
   static String? correo(String? valor) {
     final v = valor?.trim() ?? '';
@@ -294,7 +190,7 @@ void mostrarMensaje(BuildContext context, String texto, {bool error = false}) {
     ..showSnackBar(
       SnackBar(
         content: Text(texto),
-        backgroundColor: error ? const Color(0xFF3A1626) : AppTheme.surface,
+        backgroundColor: error ? AppTheme.fondoError : AppTheme.surface,
       ),
     );
 }

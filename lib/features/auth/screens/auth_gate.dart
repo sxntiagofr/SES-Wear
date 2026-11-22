@@ -1,5 +1,7 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../data/auth_repositorio.dart';
@@ -38,7 +40,7 @@ class AuthGate extends StatelessWidget {
             }
             // El perfil se crea justo después de registrarse o del primer
             // inicio con Google/Facebook; mientras llega, se espera.
-            if (!perfil.hasData) return _Cargando(repo: repo);
+            if (!perfil.hasData) return _Cargando(repo: repo, usuario: usuario);
             final datos = perfil.data!;
             if (!datos.consentimiento.vigente) {
               return _ConsentimientoScreen(repo: repo, perfil: datos);
@@ -52,9 +54,12 @@ class AuthGate extends StatelessWidget {
 }
 
 class _Cargando extends StatefulWidget {
-  const _Cargando({this.repo});
+  const _Cargando({this.repo, this.usuario});
 
   final AuthRepositorio? repo;
+
+  /// Si llega, después de la espera se ofrece crear el perfil que falta.
+  final User? usuario;
 
   @override
   State<_Cargando> createState() => _CargandoState();
@@ -62,15 +67,35 @@ class _Cargando extends StatefulWidget {
 
 class _CargandoState extends State<_Cargando> {
   bool _demorado = false;
+  bool _reintentando = false;
+  Timer? _temporizador;
 
   @override
   void initState() {
     super.initState();
     if (widget.repo != null) {
-      Future.delayed(const Duration(seconds: 8), () {
+      _temporizador = Timer(const Duration(seconds: 8), () {
         if (mounted) setState(() => _demorado = true);
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _temporizador?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _reintentar() async {
+    setState(() => _reintentando = true);
+    try {
+      await widget.repo!.crearPerfilSiFalta(widget.usuario!);
+    } catch (_) {
+      if (mounted) {
+        mostrarMensaje(context, 'No se pudo preparar tu cuenta. Revisa tu conexión.', error: true);
+      }
+    }
+    if (mounted) setState(() => _reintentando = false);
   }
 
   @override
@@ -83,10 +108,15 @@ class _CargandoState extends State<_Cargando> {
             const CircularProgressIndicator(color: AppTheme.primary),
             if (_demorado) ...[
               const SizedBox(height: 24),
-              const Text(
+              Text(
                 'Esto está tardando más de lo normal.',
                 style: TextStyle(color: AppTheme.textSecondary),
               ),
+              if (widget.usuario != null)
+                TextButton(
+                  onPressed: _reintentando ? null : _reintentar,
+                  child: const Text('Reintentar'),
+                ),
               TextButton(onPressed: widget.repo!.cerrarSesion, child: const Text('Cerrar sesión')),
             ],
           ],
@@ -112,9 +142,9 @@ class _ErrorPerfil extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.cloud_off_outlined, size: 48, color: AppTheme.textSecondary),
+              Icon(Icons.cloud_off_outlined, size: 48, color: AppTheme.textSecondary),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'No pudimos cargar tu perfil. Revisa tu conexión e inténtalo de nuevo.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textPrimary),
@@ -168,15 +198,15 @@ class _ConsentimientoScreenState extends State<_ConsentimientoScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.privacy_tip_outlined, size: 56, color: AppTheme.link),
+                  Icon(Icons.privacy_tip_outlined, size: 56, color: AppTheme.link),
                   const SizedBox(height: 20),
                   Text(
                     nombre.isEmpty ? '¡Bienvenido a SES Wear!' : '¡Hola, $nombre!',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Antes de empezar necesitamos tu autorización para tratar tus datos personales y las fotos de tus prendas, según la Ley 1581 de 2012.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppTheme.textSecondary, height: 1.4),

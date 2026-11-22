@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../data/auth_repositorio.dart';
@@ -12,8 +12,6 @@ Future<bool> ejecutarAccionAuth(BuildContext context, Future<void> Function() ac
   try {
     await accion();
     return true;
-  } on InicioCancelado {
-    return false;
   } on ErrorAuth catch (e) {
     if (context.mounted) mostrarMensaje(context, e.mensaje, error: true);
     return false;
@@ -81,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const LogoSesWear(alto: 280),
+                      const Center(child: LogoSesWear(alto: 150)),
                       const SizedBox(height: 28),
                       CampoAuth(
                         controller: _correo,
@@ -123,14 +121,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         texto: 'Iniciar sesión',
                         cargando: _cargando,
                         onPressed: _iniciarSesion,
-                      ),
-                      const SizedBox(height: 28),
-                      const SeparadorTexto('o continúa con'),
-                      const SizedBox(height: 20),
-                      BotonesSociales(
-                        deshabilitados: _cargando,
-                        onGoogle: () => _ejecutar(_repo.iniciarConGoogle),
-                        onFacebook: () => _ejecutar(_repo.iniciarConFacebook),
                       ),
                       const SizedBox(height: 20),
                       EnlaceInferior(
