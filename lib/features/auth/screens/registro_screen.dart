@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../data/auth_repositorio.dart';
@@ -46,8 +46,11 @@ class _RegistroScreenState extends State<RegistroScreen> {
     final ok = await ejecutarAccionAuth(context, accion);
     if (!mounted) return;
     setState(() => _cargando = false);
-    // La sesión ya está abierta: se vuelve a la raíz, donde AuthGate muestra la app.
-    if (ok) Navigator.of(context).popUntil((ruta) => ruta.isFirst);
+    if (!ok) return;
+    // La cuenta quedó creada y la sesión abierta: se avisa y se vuelve a la
+    // raíz, donde AuthGate muestra de una vez el inicio de la app.
+    mostrarMensaje(context, '¡Registro exitoso! Bienvenido(a) a SES Wear, ${_nombre.text.trim()}.');
+    Navigator.of(context).popUntil((ruta) => ruta.isFirst);
   }
 
   void _registrarme() {
@@ -144,7 +147,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
                         autofill: const [AutofillHints.newPassword],
                         validator: Validar.contrasenaNueva,
                       ),
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
                         child: Text(
                           'Mínimo 8 caracteres, con letras y números.',
@@ -165,14 +168,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
                         texto: 'Registrarme',
                         cargando: _cargando,
                         onPressed: _registrarme,
-                      ),
-                      const SizedBox(height: 32),
-                      const SeparadorTexto('o regístrate con'),
-                      const SizedBox(height: 20),
-                      BotonesSociales(
-                        deshabilitados: _cargando,
-                        onGoogle: () => _ejecutar(_repo.iniciarConGoogle),
-                        onFacebook: () => _ejecutar(_repo.iniciarConFacebook),
                       ),
                       const SizedBox(height: 20),
                       EnlaceInferior(
@@ -214,12 +209,12 @@ class _CasillaDatos extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 12),
                 child: Text.rich(
                   TextSpan(
-                    style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.35),
+                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.35),
                     children: [
                       const TextSpan(text: 'Acepto la '),
                       TextSpan(
                         text: 'autorización de tratamiento de datos personales',
-                        style: const TextStyle(color: AppTheme.link, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: AppTheme.link, fontWeight: FontWeight.w600),
                         recognizer: TapGestureRecognizer()..onTap = () => mostrarPoliticaDatos(context),
                       ),
                       const TextSpan(text: ' (Ley 1581 de 2012).'),
@@ -231,7 +226,7 @@ class _CasillaDatos extends StatelessWidget {
           ],
         ),
         if (mostrarError)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(left: 14),
             child: Text(
               'Debes aceptar la autorización para crear la cuenta.',

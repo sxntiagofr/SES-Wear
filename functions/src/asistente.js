@@ -200,5 +200,5 @@ export function describirError(error) {
   if (error instanceof TypeError && /fetch/i.test(error.message)) {
     return { estado: 503, mensaje: "No se pudo conectar con Gemini. Revisa tu conexión a internet." };
   }
-  return { estado: 500, mensaje: "Ocurrió un error inesperado en el asistente." };
+  return { estado: 500, mensaje: "Ocurrió un error inesperado con la IA. Inténtalo de nuevo." };
 }

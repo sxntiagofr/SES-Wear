@@ -75,3 +75,6 @@ android/key.properties
 Thumbs.db
 desktop.ini
 ~$*
+
+# --- Claves de la app (Gemini, remove.bg): NO subir a GitHub ---
+claves.json

@@ -22,42 +22,45 @@ Proyecto académico — Universidad Militar Nueva Granada, MUL B, 2026.
 | Autenticación | Firebase Authentication |
 | Base de datos | Cloud Firestore |
 | Archivos (fotos de prendas) | Firebase Storage |
-| Chatbot de moda e identificación de prendas | Gemini (Google) desde Cloud Functions (`functions/`) |
+| Chatbot, identificación de prendas e ideas de outfits | Gemini con Firebase AI Logic (desde la app, sin servidor propio) |
 | Quitar el fondo de las fotos | remove.bg desde Cloud Functions (`functions/src/fondo.js`) |
-| IA de visión (identificación de prendas) | _por definir_ |
+| Generador de outfits | En el celular (instantáneo) y con Gemini (AI Logic) |
 
 Localización: `es-CO` (ISO 639-1 / ISO 3166-1), preparada para escalar a `es-MX`, `es-AR`, etc.
+
+## Funcionalidades
+
+| Requisito | Qué hace la app | Dónde está |
+|---|---|---|
+| RF-01 | Registro e inicio de sesión con correo, recuperar contraseña y autorización de datos (Ley 1581). Agregar prendas con la cámara del dispositivo o la galería: la IA (Gemini) llena el formulario y remove.bg quita el fondo automáticamente. | `auth`, `wardrobe` |
+| RF-02 | Armario: ver, buscar, filtrar (tipo, color, estación, formalidad), detalle, editar, eliminar y "La usé hoy". | `wardrobe` |
+| RF-03 | Generador de outfits por ocasión y clima (instantáneo en el celular o "Ideas con IA"), otras opciones, guardar, favoritos y calificación. | `outfits` |
+| RF-04 | Asistente de moda que conoce tu armario e historial de conversaciones. | `assistant` |
+| RF-05 | Colecciones de prendas y outfits generados solo con ellas. | `collections` |
+| RF-06 | Estadísticas: más usadas, en desuso, costo por uso y paleta de colores. | `stats` |
+| RF-07 | Calendario para planear outfits; el de hoy aparece en Inicio. | `planner` |
+| Perfil | Editar datos y preferencias, modo claro/oscuro, eliminar la cuenta con todos sus datos. | `profile` |
 
 ## Estructura del repositorio
 
 ```
 SES-Wear/
 ├── lib/                      # Código fuente de la app Flutter
-│   ├── main.dart             # Inicializa Firebase y la navegación principal
-│   ├── firebase_options.dart # Generado por FlutterFire
-│   ├── core/theme/           # Tema visual (AppTheme)
-│   └── features/             # Un módulo por funcionalidad
-│       ├── home/             # Pantalla de inicio
-│       ├── auth/             # Registro, inicio de sesión, recuperar contraseña (RF-01)
-│       ├── wardrobe/         # Armario virtual: CRUD de prendas y filtros (RF-01, RF-02)
-│       ├── outfits/          # Generador inteligente de outfits (RF-03)
-│       ├── assistant/        # Chatbot de moda con IA (RF-04)
-│       ├── collections/      # Etiquetas y colecciones personalizadas (RF-05)
-│       ├── stats/            # Estadísticas y consumo responsable (RF-06)
-│       ├── planner/          # Calendario de atuendos (RF-07)
-│       └── profile/          # Perfil del usuario
-├── functions/                # Backend del asistente de IA (Cloud Functions + Gemini)
-├── test/                     # Pruebas unitarias y de widgets
-├── docs/                     # Documentación del proyecto
-│   ├── requisitos.md         # Requerimientos funcionales y no funcionales
-│   ├── arquitectura.md       # Arquitectura y modelo de datos en Firestore
-│   └── entregas/             # Documentos entregados por corte
-├── android/ ios/ web/ ...    # Carpetas de plataforma de Flutter
-├── firebase.json             # Configuración de Firebase CLI (FlutterFire, reglas, funciones, emuladores)
-├── .firebaserc               # Proyecto de Firebase por defecto (ses-wear)
-├── firestore.rules           # Reglas de seguridad de Firestore
-├── firestore.indexes.json    # Índices de Firestore
-└── storage.rules             # Reglas de seguridad de Firebase Storage
+│   ├── main.dart             # Firebase, App Check, tema y navegación principal
+│   ├── core/                 # Tema (claro/oscuro), sesión, widgets y utilidades compartidas
+│   └── features/             # Un módulo por funcionalidad (data/ models/ screens/ widgets/)
+│       ├── home/  auth/  wardrobe/  outfits/  assistant/
+│       └── collections/  stats/  planner/  profile/
+├── functions/                # Cloud Functions: chat, identificarPrenda, quitarFondo,
+│   ├── src/                  #   generarOutfits, eliminarCuenta + límite diario de IA
+│   └── test/                 # Pruebas de la lógica del servidor (npm test)
+├── test/                     # Pruebas de la app (flutter test)
+├── test-firebase/            # Pruebas de reglas y funciones con los emuladores
+├── docs/                     # Documentación (requisitos, arquitectura, BD, despliegue…)
+├── firebase.json             # Configuración de Firebase CLI
+├── firebase.pruebas.json     # Emuladores para test-firebase (otros puertos)
+├── firestore.rules           # Reglas de Firestore (validan los datos de cada colección)
+└── storage.rules             # Reglas de Storage
 ```
 
 ## Cómo funciona el asistente con la base de datos
@@ -80,10 +83,9 @@ Así, el asistente recomienda combinaciones con las prendas que el usuario ya re
 
 ### Requisitos previos
 
-- [Git](https://git-scm.com/)
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) (incluye Dart)
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) y [Git](https://git-scm.com/) en el PATH
 - [Node.js](https://nodejs.org/) 22 y Firebase CLI: `npm install -g firebase-tools`
-- FlutterFire CLI: `dart pub global activate flutterfire_cli`
+- Java 21 (solo para los emuladores) y Android Studio (para compilar en Android)
 
 ### Ejecutar la app
 
@@ -91,39 +93,25 @@ Así, el asistente recomienda combinaciones con las prendas que el usuario ya re
 git clone https://github.com/sxntiagofr/SES-Wear.git
 cd SES-Wear
 flutter pub get
-flutter run
+flutter run                                      # contra el proyecto real
+flutter run --dart-define=USAR_EMULADORES=true   # contra los emuladores locales
 ```
 
-### Poner en marcha el asistente (una sola vez)
+### Poner en marcha el backend y los inicios de sesión
 
-1. En Firebase Console → **Authentication → Método de acceso**, activa **Anónimo** (mientras no exista la pantalla de inicio de sesión, la app entra de forma anónima para poder usar el asistente).
-2. El proyecto debe estar en el plan **Blaze** (las Cloud Functions que llaman APIs externas no funcionan en el plan Spark).
-3. Pon tus claves en `functions/.secret.local`: cópialo de `functions/.secret.local.example` y reemplaza cada `PEGA_AQUI_...` por tu clave. Ese archivo no se sube a GitHub.
-4. Corre el script, que guarda las claves en el gestor de secretos de Firebase y publica reglas y funciones:
+Paso a paso en [`docs/despliegue.md`](docs/despliegue.md): claves de API, despliegue de reglas y funciones, Google/Facebook, App Check y la lista de verificación antes de una entrega.
 
-```powershell
-# Windows (desde la carpeta SES-Wear)
-powershell -ExecutionPolicy Bypass -File scripts\configurar-claves.ps1
-```
+### Pruebas
 
 ```bash
-# macOS / Linux
-bash scripts/configurar-claves.sh
-```
-
-O, si prefieres hacerlo a mano:
-
-```bash
-firebase login
-firebase functions:secrets:set GEMINI_API_KEY   # pegar la API key de Google AI Studio
-firebase functions:secrets:set REMOVE_BG_API_KEY # pegar la API key de remove.bg
-cd functions && npm install && cd ..
-firebase deploy --only firestore:rules,firestore:indexes,storage,functions
+flutter analyze && flutter test
+cd functions && npm test
+cd test-firebase && npm install && npm test   # necesita Java
 ```
 
 Para probar el chat sin Firebase, en el navegador, ver [`functions/README.md`](functions/README.md).
 
-**Cupos gratuitos** (mensajes del chat, fotos identificadas y fotos sin fondo) y hasta cuándo funcionan: ver [`docs/limites-gratuitos.md`](docs/limites-gratuitos.md).
+**Cupos gratuitos** (mensajes del chat, fotos identificadas y fotos sin fondo) y hasta cuándo funcionan: ver [`docs/limites-gratuitos.md`](docs/limites-gratuitos.md). Además, cada usuario tiene un límite diario de usos de IA (`functions/src/limites.js`).
 
 ## Flujo de trabajo
 

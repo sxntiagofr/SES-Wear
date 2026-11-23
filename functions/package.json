@@ -8,6 +8,7 @@
     "node": "22"
   },
   "scripts": {
+    "test": "node --test test/*.test.js",
     "prueba": "node servidor-prueba.js",
     "emulador": "firebase emulators:start --only functions",
     "desplegar": "firebase deploy --only functions",

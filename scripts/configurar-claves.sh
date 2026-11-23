@@ -14,7 +14,8 @@ set -euo pipefail
 raiz="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$raiz"
 archivo="functions/.secret.local"
-claves=(GEMINI_API_KEY REMOVE_BG_API_KEY)
+# Solo remove.bg: la IA (Gemini) corre en la app con Firebase AI Logic y no necesita clave.
+claves=(REMOVE_BG_API_KEY)
 
 if [ ! -f "$archivo" ]; then
   cp functions/.secret.local.example "$archivo"
@@ -54,5 +55,5 @@ done
 firebase deploy --only "firestore:rules,firestore:indexes,storage,functions"
 
 echo
-echo "Listo. Último paso manual: en Firebase Console → Authentication → Método de acceso, activa 'Anónimo'."
+echo "Listo. Pasos manuales que faltan (AI Logic, App Check): ver docs/pendientes.md."
 echo "Después: flutter pub get && flutter run"

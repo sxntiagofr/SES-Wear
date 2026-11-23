@@ -18,7 +18,8 @@ Set-Location $raiz
 
 $archivo = Join-Path $raiz "functions\.secret.local"
 $plantilla = Join-Path $raiz "functions\.secret.local.example"
-$claves = @("GEMINI_API_KEY", "REMOVE_BG_API_KEY")
+# Solo remove.bg: la IA (Gemini) corre en la app con Firebase AI Logic y no necesita clave.
+$claves = @("REMOVE_BG_API_KEY")
 
 function Leer-Claves {
     $valores = @{}
@@ -80,5 +81,5 @@ firebase deploy --only "firestore:rules,firestore:indexes,storage,functions"
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host ""
-Write-Host "Listo. Último paso manual: en Firebase Console -> Authentication -> Método de acceso, activa 'Anónimo'." -ForegroundColor Green
+Write-Host "Listo. Pasos manuales que faltan (AI Logic, App Check): ver docs/pendientes.md." -ForegroundColor Green
 Write-Host "Después: flutter pub get; flutter run"

@@ -3,13 +3,12 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  facebook_auth_desktop
   file_selector_windows
   firebase_core
   cloud_firestore
+  firebase_app_check
   firebase_auth
   firebase_storage
-  flutter_secure_storage_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

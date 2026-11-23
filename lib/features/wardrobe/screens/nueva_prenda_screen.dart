@@ -1,66 +1,16 @@
 import 'dart:typed_data';
 
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:material_ui/material_ui.dart';
 
+import '../../../core/ia/servicio_ia.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/prendas_repositorio.dart';
 import '../models/prenda.dart';
-
-/// Abre la cámara (o la galería) y, si el usuario toma una foto, abre la
-/// pantalla "Nueva prenda". Devuelve `true` si la prenda se guardó.
-Future<bool> agregarPrendaConFoto(
-  BuildContext context, {
-  ImageSource origen = ImageSource.camera,
-  PrendasRepositorio? repositorio,
-}) async {
-  final XFile? foto;
-  try {
-    // Se reduce a ~1024 px: suficiente para la IA y más rápido de subir (RNF-01).
-    foto = await ImagePicker().pickImage(
-      source: origen,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 85,
-    );
-  } catch (_) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir la cámara. Revisa los permisos de la app.')),
-      );
-    }
-    return false;
-  }
-  if (foto == null || !context.mounted) return false;
-
-  final bytes = await foto.readAsBytes();
-  final tipoImagen = _tipoDeImagen(foto);
-  if (!context.mounted) return false;
-  final guardada = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => NuevaPrendaScreen(
-        foto: bytes,
-        tipoImagen: tipoImagen,
-        repositorio: repositorio,
-      ),
-    ),
-  );
-  return guardada == true;
-}
-
-String _tipoDeImagen(XFile foto) {
-  final tipo = foto.mimeType;
-  if (tipo != null && tipo.startsWith('image/')) return tipo;
-  final nombre = foto.name.toLowerCase();
-  if (nombre.endsWith('.png')) return 'image/png';
-  if (nombre.endsWith('.webp')) return 'image/webp';
-  if (nombre.endsWith('.heic') || nombre.endsWith('.heif')) return 'image/heic';
-  return 'image/jpeg';
-}
+import '../widgets/campos_prenda.dart';
 
 /// Pantalla "Nueva prenda": muestra la foto, la IA llena el formulario
-/// (tipo, categoría, colores, tela, estilo, formalidad, estación) y el usuario
+/// (tipo, categoría, colores, tela, formalidad, estación) y el usuario
 /// puede corregir antes de guardar.
 class NuevaPrendaScreen extends StatefulWidget {
   const NuevaPrendaScreen({
@@ -68,11 +18,15 @@ class NuevaPrendaScreen extends StatefulWidget {
     required this.foto,
     this.tipoImagen = 'image/jpeg',
     this.repositorio,
+    this.quitarFondoAlAbrir = true,
   });
 
   final Uint8List foto;
   final String tipoImagen;
   final PrendasRepositorio? repositorio;
+
+  /// Quita el fondo apenas se abre la pantalla (remove.bg).
+  final bool quitarFondoAlAbrir;
 
   @override
   State<NuevaPrendaScreen> createState() => _NuevaPrendaScreenState();
@@ -82,16 +36,7 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
   late final PrendasRepositorio _repo;
   final _form = GlobalKey<FormState>();
 
-  final _nombre = TextEditingController();
-  final _categoria = TextEditingController();
-  final _colorPrimario = TextEditingController();
-  final _colorSecundario = TextEditingController();
-  final _tela = TextEditingController();
-  final _estilo = TextEditingController();
-  final _etiquetas = TextEditingController();
-  String _tipo = 'superior';
-  String _formalidad = 'casual';
-  String _estacion = 'todo el año';
+  final _formulario = FormularioPrenda();
 
   bool _analizando = true;
   bool _guardando = false;
@@ -103,19 +48,19 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
   late String _tipoFoto = widget.tipoImagen;
   bool _sinFondo = false;
   bool _quitandoFondo = false;
+  String? _avisoFondo;
 
   @override
   void initState() {
     super.initState();
     _repo = widget.repositorio ?? PrendasRepositorio();
     _analizar();
+    if (widget.quitarFondoAlAbrir) _quitarFondo();
   }
 
   @override
   void dispose() {
-    for (final c in [_nombre, _categoria, _colorPrimario, _colorSecundario, _tela, _estilo, _etiquetas]) {
-      c.dispose();
-    }
+    _formulario.dispose();
     super.dispose();
   }
 
@@ -133,10 +78,8 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
         return;
       }
       _llenar(resultado.prenda);
-    } on FirebaseFunctionsException catch (e) {
-      if (mounted) {
-        setState(() => _aviso = '${e.message ?? 'La IA no está disponible.'} Puedes llenar los datos a mano.');
-      }
+    } on ErrorIA catch (e) {
+      if (mounted) setState(() => _aviso = '${e.mensaje} Puedes llenar los datos a mano.');
     } catch (_) {
       if (mounted) {
         setState(() => _aviso = 'No se pudo conectar con la IA. Puedes llenar los datos a mano.');
@@ -149,44 +92,19 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
   void _llenar(Prenda p) {
     setState(() {
       _identificadaPorIA = true;
-      _nombre.text = p.nombre;
-      _categoria.text = p.categoria;
-      _colorPrimario.text = p.colorPrimario;
-      _colorSecundario.text = p.colorSecundario;
-      _tela.text = p.tela;
-      _estilo.text = p.estilo;
-      _etiquetas.text = p.etiquetas.join(', ');
-      _tipo = p.tipo;
-      _formalidad = p.formalidad;
-      _estacion = p.estacion;
+      _formulario.llenar(p);
     });
   }
 
   Future<void> _guardar() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _guardando = true);
-    final prenda = Prenda(
-      nombre: _nombre.text.trim(),
-      tipo: _tipo,
-      categoria: _categoria.text.trim().toLowerCase(),
-      colorPrimario: _colorPrimario.text.trim().toLowerCase(),
-      colorSecundario: _colorSecundario.text.trim().toLowerCase(),
-      tela: _tela.text.trim().toLowerCase(),
-      estilo: _estilo.text.trim().toLowerCase(),
-      formalidad: _formalidad,
-      estacion: _estacion,
-      etiquetas: _etiquetas.text
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList(),
-      identificadaPorIA: _identificadaPorIA,
-    );
+    final prenda = _formulario.aPrenda(identificadaPorIA: _identificadaPorIA);
     try {
       await _repo.guardar(prenda, _foto, tipo: _tipoFoto);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${prenda.nombre}" se guardó en tu armario.')),
+        SnackBar(content: Text('¡Guardado exitoso! "${prenda.nombre}" ya está en tu armario.')),
       );
       Navigator.of(context).pop(true);
     } catch (_) {
@@ -198,11 +116,35 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
     }
   }
 
-  /// Quita el fondo con remove.bg. Gasta 1 de las 50 fotos gratis del mes,
-  /// por eso solo se hace cuando el usuario lo pide.
+  /// remove.bg acepta JPG, PNG y WEBP.
+  bool get _fondoSoportado => const ['image/jpeg', 'image/png', 'image/webp'].contains(widget.tipoImagen);
+
+  /// Mensaje claro para cada error de la Cloud Function `quitarFondo`.
+  static String mensajeFondo(Object error) {
+    if (error is ErrorFondo) return error.mensaje;
+    if (error is FirebaseFunctionsException) {
+      return switch (error.code) {
+        'not-found' || 'internal' when (error.message ?? '').toLowerCase() == error.code =>
+          'El servicio para quitar el fondo aún no está publicado en el servidor.',
+        'not-found' => 'El servicio para quitar el fondo aún no está publicado en el servidor.',
+        'unauthenticated' => 'Vuelve a iniciar sesión para quitar el fondo.',
+        _ => error.message ?? 'No se pudo quitar el fondo.',
+      };
+    }
+    return 'No se pudo quitar el fondo. Revisa tu conexión.';
+  }
+
+  /// Quita el fondo con remove.bg (Cloud Function). Se hace automáticamente al
+  /// abrir la pantalla; si falla, la prenda se puede guardar con la foto original.
   Future<void> _quitarFondo() async {
-    setState(() => _quitandoFondo = true);
-    String mensaje;
+    if (!_fondoSoportado) {
+      setState(() => _avisoFondo = 'Para quitar el fondo la foto debe ser JPG, PNG o WEBP.');
+      return;
+    }
+    setState(() {
+      _quitandoFondo = true;
+      _avisoFondo = null;
+    });
     try {
       final resultado = await _repo.quitarFondo(widget.foto, tipo: widget.tipoImagen);
       if (!mounted) return;
@@ -211,18 +153,11 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
         _tipoFoto = resultado.tipo;
         _sinFondo = true;
       });
-      final restantes = resultado.fotosGratisRestantes;
-      mensaje = restantes == null
-          ? 'Listo, se quitó el fondo.'
-          : 'Listo, se quitó el fondo. Quedan $restantes fotos gratis este mes.';
-    } on FirebaseFunctionsException catch (e) {
-      mensaje = e.message ?? 'No se pudo quitar el fondo. Puedes guardar la foto original.';
-    } catch (_) {
-      mensaje = 'No se pudo quitar el fondo. Puedes guardar la foto original.';
+    } catch (e) {
+      if (mounted) setState(() => _avisoFondo = mensajeFondo(e));
+    } finally {
+      if (mounted) setState(() => _quitandoFondo = false);
     }
-    if (!mounted) return;
-    setState(() => _quitandoFondo = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   void _restaurarFoto() {
@@ -235,6 +170,16 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
 
   Widget _botonFondo() {
     final ocupado = _quitandoFondo || _guardando;
+    if (_quitandoFondo) {
+      return const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 10),
+          Text('Quitando el fondo…'),
+        ],
+      );
+    }
     if (_sinFondo) {
       return TextButton.icon(
         onPressed: ocupado ? null : _restaurarFoto,
@@ -242,12 +187,19 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
         label: const Text('Usar foto original'),
       );
     }
-    return OutlinedButton.icon(
-      onPressed: ocupado ? null : _quitarFondo,
-      icon: _quitandoFondo
-          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.auto_fix_high),
-      label: Text(_quitandoFondo ? 'Quitando fondo…' : 'Quitar fondo (50 fotos gratis al mes)'),
+    return Column(
+      children: [
+        if (_avisoFondo != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(_avisoFondo!, textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+        OutlinedButton.icon(
+          onPressed: ocupado ? null : _quitarFondo,
+          icon: const Icon(Icons.auto_fix_high),
+          label: Text(_avisoFondo == null ? 'Quitar fondo' : 'Reintentar quitar fondo'),
+        ),
+      ],
     );
   }
 
@@ -266,7 +218,7 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: ColoredBox(
-                    color: _sinFondo ? AppTheme.primaryLight : Colors.transparent,
+                    color: _sinFondo ? Colors.white : Colors.transparent,
                     child: Image.memory(_foto, fit: _sinFondo ? BoxFit.contain : BoxFit.cover),
                   ),
                 ),
@@ -276,7 +228,11 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
               const SizedBox(height: 8),
               _estadoIA(),
               const SizedBox(height: 12),
-              ..._campos(),
+              CamposPrenda(
+                formulario: _formulario,
+                habilitado: !_analizando && !_guardando,
+                alCambiar: () => setState(() {}),
+              ),
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: (_analizando || _guardando || _quitandoFondo) ? null : _guardar,
@@ -309,7 +265,7 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
     if (_aviso != null) {
       return Row(
         children: [
-          const Icon(Icons.info_outline, color: AppTheme.error),
+          Icon(Icons.info_outline, color: AppTheme.error),
           const SizedBox(width: 8),
           Expanded(child: Text(_aviso!)),
           TextButton(onPressed: _analizar, child: const Text('Reintentar')),
@@ -325,55 +281,4 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
     );
   }
 
-  List<Widget> _campos() {
-    final habilitado = !_analizando && !_guardando;
-    Widget texto(TextEditingController c, String etiqueta, {bool requerido = false}) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: TextFormField(
-          controller: c,
-          enabled: habilitado,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(labelText: etiqueta, border: const OutlineInputBorder()),
-          validator: requerido
-              ? (v) => (v == null || v.trim().isEmpty) ? 'Escribe $etiqueta'.toLowerCase() : null
-              : null,
-        ),
-      );
-    }
-
-    Widget opciones(String etiqueta, String valor, List<String> lista, ValueChanged<String> alCambiar) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: DropdownButtonFormField<String>(
-          key: ValueKey('$etiqueta-$valor'),
-          initialValue: valor,
-          decoration: InputDecoration(labelText: etiqueta, border: const OutlineInputBorder()),
-          items: [for (final o in lista) DropdownMenuItem(value: o, child: Text(_capitalizar(o)))],
-          onChanged: habilitado ? (v) => alCambiar(v!) : null,
-        ),
-      );
-    }
-
-    return [
-      texto(_nombre, 'Nombre', requerido: true),
-      opciones('Tipo', _tipo, OpcionesPrenda.tipos, (v) => setState(() => _tipo = v)),
-      texto(_categoria, 'Categoría (jean, buso, tenis…)'),
-      Row(
-        children: [
-          Expanded(child: texto(_colorPrimario, 'Color principal')),
-          const SizedBox(width: 12),
-          Expanded(child: texto(_colorSecundario, 'Color secundario')),
-        ],
-      ),
-      texto(_tela, 'Tela'),
-      texto(_estilo, 'Estilo'),
-      opciones('Formalidad', _formalidad, OpcionesPrenda.formalidades,
-          (v) => setState(() => _formalidad = v)),
-      opciones('Estación', _estacion, OpcionesPrenda.estaciones, (v) => setState(() => _estacion = v)),
-      texto(_etiquetas, 'Etiquetas (separadas por coma)'),
-    ];
-  }
-
-  static String _capitalizar(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 }

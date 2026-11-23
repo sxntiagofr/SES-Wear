@@ -12,6 +12,10 @@ También recibe **fotos de prendas**: el usuario toma una foto (o la elige de la
 | `index.js` | Cloud Function `chat` que llama la app Flutter. Usa `src/asistente.js` y `src/datos.js`. |
 | `src/identificador.js` | Identificación de prendas desde una foto (Cloud Function `identificarPrenda`). |
 | `src/fondo.js` | Quitar el fondo de la foto con remove.bg (Cloud Function `quitarFondo`). |
+| `src/outfits.js` | Generador de outfits con IA (Cloud Function `generarOutfits`, RF-03). |
+| `src/limites.js` | Límite de usos diarios de IA por usuario (`users/{uid}/uso/{fecha}`). |
+| `src/cuenta.js` | Borrado completo de la cuenta (Cloud Function `eliminarCuenta`, Ley 1581). |
+| `test/` | Pruebas de la lógica (`npm test`, sin internet). |
 | `src/datos.js` | Conexión con Firestore: lee el perfil y las prendas del usuario y guarda el historial de conversaciones. |
 | `servidor-prueba.js` | Servidor local para probar el chat en el navegador, sin Firebase. |
 | `prueba/index.html` | Interfaz de prueba del chat, con la estética de la app. |
@@ -183,7 +187,18 @@ Si Firestore falla, el asistente responde igual (sin armario) y el error queda e
 
 El servidor de prueba local (`npm run prueba`) no usa Firestore: responde sin armario.
 
+## Generar outfits (`generarOutfits`)
+
+`call({ ocasion, clima, cantidad?, excluir?: [[ids]], coleccionId? })` → `{ outfits: [{ nombre, prendaIds, explicacion }] }`. Lee las prendas del usuario en Firestore (o solo las de una colección) y Gemini solo puede usar ids que existen. `excluir` sirve para "otras opciones" sin repetir.
+
+## Eliminar la cuenta (`eliminarCuenta`)
+
+`call({ confirmacion: "ELIMINAR" })` borra `users/{uid}` con todas sus subcolecciones, las fotos en Storage y la cuenta de Authentication.
+
+## Límite diario y App Check
+
+Cada usuario tiene un cupo diario por función (`src/limites.js`: chat 100, identificarPrenda 40, generarOutfits 30, quitarFondo 5). Si se pasa, la función responde `resource-exhausted`. Con `EXIGIR_APP_CHECK=true` en `functions/.env` solo se aceptan llamadas de la app oficial (ver `docs/despliegue.md`).
+
 ## Pendiente
 
-- Clima de la ciudad del usuario.
-- Enviar fotos desde la app Flutter (`image_picker`).
+- Clima de la ciudad del usuario (hoy el usuario elige el clima en el generador).

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../data/auth_repositorio.dart';
@@ -69,9 +69,9 @@ class _RecuperarContrasenaScreenState extends State<RecuperarContrasenaScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Center(child: SizedBox(width: 200, child: LogoSesWear(alto: 220))),
+                    const Center(child: LogoSesWear(alto: 130)),
                     const SizedBox(height: 28),
-                    const Text(
+                    Text(
                       'Restaurar contraseña',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -81,7 +81,7 @@ class _RecuperarContrasenaScreenState extends State<RecuperarContrasenaScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
+                    Text(
                       'Ingresa tu correo electrónico y te enviaremos instrucciones para crear una nueva contraseña.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppTheme.textSecondary, height: 1.4),
@@ -119,14 +119,14 @@ class _RecuperarContrasenaScreenState extends State<RecuperarContrasenaScreen> {
                             Expanded(
                               child: Text(
                                 'Si $_enviadoA tiene una cuenta, te llegará un correo con el enlace en unos minutos.',
-                                style: const TextStyle(color: AppTheme.textPrimary, height: 1.35),
+                                style: TextStyle(color: AppTheme.textPrimary, height: 1.35),
                               ),
                             ),
                           ],
                         ),
                       ),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       'Revisa también tu carpeta de correo no deseado.',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),

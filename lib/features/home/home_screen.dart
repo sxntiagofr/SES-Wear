@@ -1,209 +1,161 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../auth/data/auth_repositorio.dart';
-import '../auth/models/perfil_usuario.dart';
+import '../../core/widgets/boton_degradado.dart';
+import '../assistant/screens/chat_screen.dart';
+import '../wardrobe/data/prendas_repositorio.dart';
+import '../wardrobe/models/prenda.dart';
+import '../wardrobe/screens/armario_screen.dart';
+import '../wardrobe/screens/camara_screen.dart';
+import '../wardrobe/screens/detalle_prenda_screen.dart';
+import '../wardrobe/widgets/tarjeta_prenda.dart';
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+/// Pestañas de la navegación principal (ver main.dart). La cámara del centro
+/// es una acción, no una pestaña.
+class Pestanas {
+  Pestanas._();
+  static const inicio = 0;
+  static const crear = 1;
+  static const calendario = 2;
+  static const perfil = 3;
+}
+
+/// Inicio (diseño de referencia): logo, "Añadir Prenda", categorías,
+/// acceso al asistente y un vistazo al armario.
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key, this.prendasRepositorio, this.abrirAsistente});
+
+  final PrendasRepositorio? prendasRepositorio;
+
+  /// Para pruebas: qué hacer al tocar el asistente (por defecto abre el chat).
+  final VoidCallback? abrirAsistente;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final _prendasRepo = widget.prendasRepositorio ?? PrendasRepositorio();
+  late final Stream<List<Prenda>> _prendas = _prendasRepo.observar();
+
+  static const _categorias = [
+    (emoji: '👕', titulo: 'Partes de arriba', tipo: 'superior'),
+    (emoji: '👖', titulo: 'Partes de abajo', tipo: 'inferior'),
+    (emoji: '👟', titulo: 'Calzado', tipo: 'calzado'),
+    (emoji: '👜', titulo: 'Accesorios', tipo: 'accesorio'),
+  ];
+
+  void _abrir(Widget pantalla) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => pantalla));
+
+  void _armario([String? tipo]) => _abrir(ArmarioScreen(repositorio: _prendasRepo, tipoInicial: tipo));
+
+  void _asistente() => widget.abrirAsistente != null ? widget.abrirAsistente!() : _abrir(const ChatScreen());
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  const _HomeHeader(),
-
-                  const SizedBox(height: 28),
-
-                  const _OutfitBanner(),
-
-                  const SizedBox(height: 30),
-
-                  const _SectionHeader(
-                    title: 'Accesos rápidos',
-                    subtitle: 'Todo lo que necesitas para tu estilo',
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  const _QuickActions(),
-
-                  const SizedBox(height: 30),
-
-                  const _SectionHeader(
-                    title: 'Mi armario',
-                    subtitle: 'Un vistazo a tu colección',
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  const _WardrobeSummary(),
-
-                  const SizedBox(height: 24),
-                ]),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Encabezado principal
-class _HomeHeader extends StatelessWidget {
-  const _HomeHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _Saludo(),
-              const SizedBox(height: 6),
-              const Text(
-                'Tu estilo, más inteligente.',
-                style: TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                  letterSpacing: -0.7,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: 48,
-          height: 48,
-          decoration: const BoxDecoration(
-            color: AppTheme.primaryLight,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.person_outline_rounded,
-            color: AppTheme.primary,
-            size: 26,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// «¡Hola, {nombre}!» con el nombre guardado en el perfil (users/{uid}).
-class _Saludo extends StatelessWidget {
-  const _Saludo();
-
-  @override
-  Widget build(BuildContext context) {
-    final repo = AuthRepositorio.instancia;
-    final usuario = repo.usuarioActual;
-    const estilo = TextStyle(fontSize: 15, color: AppTheme.textSecondary);
-    if (usuario == null) return const Text('¡Hola!', style: estilo);
-    return StreamBuilder<PerfilUsuario?>(
-      stream: repo.observarPerfil(usuario.uid),
-      builder: (context, snap) {
-        final nombre = snap.data?.nombreCorto ?? '';
-        return Text(nombre.isEmpty ? '¡Hola! 👋' : '¡Hola, $nombre! 👋', style: estilo);
-      },
-    );
-  }
-}
-
-// Banner destacado
-class _OutfitBanner extends StatelessWidget {
-  const _OutfitBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.primary, AppTheme.primaryDark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
+          _encabezado(context),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                BotonDegradado(
+                  texto: 'Añadir Prenda',
+                  icono: Icons.photo_camera_outlined,
+                  alto: 56,
+                  tamanoTexto: 19,
+                  onPressed: () => agregarPrenda(context, repositorio: _prendasRepo),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(30),
+                const SizedBox(height: 26),
+                const _Titulo('Categorías'),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final c in _categorias)
+                      Expanded(
+                        child: _Categoria(emoji: c.emoji, titulo: c.titulo, onTap: () => _armario(c.tipo)),
+                      ),
+                  ],
                 ),
-                child: const Text(
-                  'OUTFIT DEL DÍA',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.8,
-                  ),
+                const SizedBox(height: 22),
+                _TarjetaAsistente(onTap: _asistente),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    const Expanded(child: _Titulo('Mi Armario')),
+                    IconButton(
+                      tooltip: 'Ver todo el armario',
+                      onPressed: _armario,
+                      icon: Icon(Icons.chevron_right, color: AppTheme.textPrimary),
+                    ),
+                  ],
                 ),
-              ),
-              const Icon(Icons.auto_awesome, color: Colors.white),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          const Text(
-            'Descubre tu estilo',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
+                const SizedBox(height: 8),
+                StreamBuilder<List<Prenda>>(
+                  stream: _prendas,
+                  builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Text('No se pudo cargar tu armario.', style: TextStyle(color: AppTheme.textSecondary));
+                    }
+                    if (!snap.hasData) {
+                      return const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()));
+                    }
+                    final prendas = snap.data!;
+                    if (prendas.isEmpty) {
+                      return _ArmarioVacio(onAgregar: () => agregarPrenda(context, repositorio: _prendasRepo));
+                    }
+                    final visibles = prendas.take(9).toList();
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: visibles.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                      ),
+                      itemBuilder: (_, i) => TarjetaPrenda(
+                        prenda: visibles[i],
+                        conNombre: false,
+                        onTap: () => _abrir(DetallePrendaScreen(prenda: visibles[i], repositorio: _prendasRepo)),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 8),
-
-          Text(
-            'Tus prendas, nuevas posibilidades.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.85),
-              fontSize: 14,
+  Widget _encabezado(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(gradient: AppTheme.degradadoEncabezado),
+      padding: EdgeInsets.fromLTRB(12, MediaQuery.paddingOf(context).top + 8, 12, 20),
+      child: Stack(
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              tooltip: 'Asistente de estilo',
+              onPressed: _asistente,
+              icon: Icon(Icons.auto_awesome, color: AppTheme.textPrimary),
             ),
           ),
-
-          const SizedBox(height: 22),
-
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () {},
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppTheme.primaryDark,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const Text(
-                'Explorar outfits',
-                style: TextStyle(fontWeight: FontWeight.w600),
+          Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 132,
+                semanticLabel: 'SES Wear. Tu estilo, más inteligente',
               ),
             ),
           ),
@@ -213,191 +165,130 @@ class _OutfitBanner extends StatelessWidget {
   }
 }
 
-// Título reutilizable para secciones
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-
-  const _SectionHeader({required this.title, required this.subtitle});
+class _Titulo extends StatelessWidget {
+  const _Titulo(this.texto);
+  final String texto;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          subtitle,
-          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) =>
+      Text(texto, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.textPrimary));
 }
 
-// Accesos rápidos
-class _QuickActions extends StatelessWidget {
-  const _QuickActions();
+class _Categoria extends StatelessWidget {
+  const _Categoria({required this.emoji, required this.titulo, required this.onTap});
+
+  final String emoji;
+  final String titulo;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final actions = [
-      (
-        title: 'Mi armario',
-        subtitle: 'Organiza tus prendas',
-        icon: Icons.checkroom_outlined,
-      ),
-      (
-        title: 'Calendario',
-        subtitle: 'Planifica tus looks',
-        icon: Icons.calendar_month_outlined,
-      ),
-      (
-        title: 'Crear outfit',
-        subtitle: 'Combina tus prendas',
-        icon: Icons.auto_awesome_outlined,
-      ),
-      (
-        title: 'Estadísticas',
-        subtitle: 'Descubre tus hábitos',
-        icon: Icons.bar_chart_rounded,
-      ),
-    ];
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: actions.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.35,
-      ),
-      itemBuilder: (context, index) {
-        final action = actions[index];
-
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppTheme.primaryLight.withValues(alpha: 0.7),
-            ),
-          ),
+    return Semantics(
+      button: true,
+      label: titulo,
+      excludeSemantics: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(action.icon, color: AppTheme.primary, size: 25),
-              const SizedBox(height: 12),
-              Text(
-                action.title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.border),
                 ),
+                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 28))),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
-                action.subtitle,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                ),
+                titulo,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: TextStyle(fontSize: 12, height: 1.15, color: AppTheme.textSecondary),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-// Resumen del armario
-class _WardrobeSummary extends StatelessWidget {
-  const _WardrobeSummary();
+class _TarjetaAsistente extends StatelessWidget {
+  const _TarjetaAsistente({required this.onTap});
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            title: 'Prendas',
-            value: '0',
-            subtitle: 'Registradas',
-            icon: Icons.checkroom_outlined,
+    return Material(
+      color: AppTheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: AppTheme.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(gradient: AppTheme.degradado, shape: BoxShape.circle),
+                child: const Icon(Icons.auto_awesome, color: Colors.white),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Pregúntale a tu asistente',
+                        style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text('¿Qué me pongo hoy con lo que tengo?',
+                        style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: AppTheme.textSecondary),
+            ],
           ),
         ),
-        SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            title: 'Outfits',
-            value: '0',
-            subtitle: 'Guardados',
-            icon: Icons.auto_awesome_outlined,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-
-  const _StatCard({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-  });
+class _ArmarioVacio extends StatelessWidget {
+  const _ArmarioVacio({required this.onAgregar});
+  final VoidCallback onAgregar;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.primaryLight.withValues(alpha: 0.7)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppTheme.primary, size: 23),
-          const SizedBox(height: 16),
+          Icon(Icons.checkroom_outlined, size: 40, color: AppTheme.primary),
+          const SizedBox(height: 8),
           Text(
-            title,
-            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            'Tu armario está vacío. Toma la foto de tu primera prenda y la IA la registra por ti.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.textSecondary),
           ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 27,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          Text(
-            subtitle,
-            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-          ),
+          TextButton(onPressed: onAgregar, child: const Text('Tomar foto')),
         ],
       ),
     );

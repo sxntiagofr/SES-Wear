@@ -1,10 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
-import '../../../core/config/auth_config.dart';
 import '../models/perfil_usuario.dart';
 
 /// Error de inicio de sesión con un mensaje listo para mostrar al usuario.
@@ -18,27 +18,30 @@ class ErrorAuth implements Exception {
   String toString() => mensaje;
 }
 
-/// El usuario cerró la ventana de Google o Facebook sin elegir cuenta.
-class InicioCancelado implements Exception {
-  const InicioCancelado();
-}
-
 /// Cuentas de usuario (Firebase Authentication) y su perfil (Cloud Firestore).
 ///
 /// - Correo y contraseña: registro, inicio de sesión y recuperación por correo.
-/// - Google y Facebook: inicio de sesión social; la primera vez se crea el perfil.
 /// - Cada cuenta tiene su documento `users/{uid}` con los datos del registro.
 class AuthRepositorio {
-  AuthRepositorio({FirebaseAuth? auth, FirebaseFirestore? firestore})
+  AuthRepositorio({FirebaseAuth? auth, FirebaseFirestore? firestore, FirebaseFunctions? functions})
       : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+        _firestore = firestore ?? FirebaseFirestore.instance,
+        _functionsInyectadas = functions;
 
   static final AuthRepositorio instancia = AuthRepositorio();
 
+  /// Tiempo máximo para guardar el perfil antes de avisar que no hay conexión.
+  static const tiempoMaximoPerfil = Duration(seconds: 20);
+
+  /// Lo que se espera la confirmación del servidor al registrarse antes de
+  /// dejar entrar al usuario (el perfil ya quedó guardado en el dispositivo).
+  static const esperaServidor = Duration(seconds: 5);
+
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions? _functionsInyectadas;
 
-  static Future<void>? _googleListo;
+  FirebaseFunctions get _functions => _functionsInyectadas ?? FirebaseFunctions.instance;
 
   DocumentReference<Map<String, dynamic>> _perfilRef(String uid) =>
       _firestore.collection('users').doc(uid);
@@ -107,16 +110,30 @@ class AuthRepositorio {
     );
 
     try {
-      await _perfilRef(usuario.uid).set(perfil.aFirestoreNuevo());
-      await usuario.updateDisplayName(perfil.nombreCompleto);
-    } on FirebaseException catch (e) {
-      // La cuenta quedó creada pero sin perfil: se borra para que pueda
+      // Firestore guarda el perfil primero en el dispositivo y luego en el
+      // servidor. Solo se espera unos segundos la confirmación del servidor:
+      // si tarda, el perfil ya quedó guardado localmente y se sincroniza solo,
+      // así el usuario entra a la app de una vez en vez de quedarse cargando.
+      await _perfilRef(usuario.uid).set(perfil.aFirestoreNuevo()).timeout(esperaServidor);
+    } on TimeoutException {
+      debugPrint('El perfil se sincronizará con el servidor en segundo plano.');
+    } on Object catch (e) {
+      // El servidor rechazó el perfil: se borra la cuenta para que pueda
       // registrarse de nuevo con el mismo correo.
       await usuario.delete().catchError((_) {});
+      final codigo = e is FirebaseException ? e.code : 'desconocido';
       throw ErrorAuth(
-        'No se pudieron guardar tus datos (${e.code}). Revisa tu conexión e inténtalo de nuevo.',
-        codigo: e.code,
+        'No se pudieron guardar tus datos ($codigo). Revisa tu conexión e inténtalo de nuevo.',
+        codigo: codigo,
       );
+    }
+
+    // El perfil ya está guardado: si solo falla el nombre visible de
+    // Firebase Authentication, la cuenta sigue siendo válida.
+    try {
+      await usuario.updateDisplayName(perfil.nombreCompleto).timeout(const Duration(seconds: 5));
+    } on Object catch (e) {
+      debugPrint('No se pudo actualizar el nombre visible: $e');
     }
   }
 
@@ -133,81 +150,52 @@ class AuthRepositorio {
   }
 
   // ---------------------------------------------------------------------------
-  // Google y Facebook
-  // ---------------------------------------------------------------------------
-
-  Future<void> iniciarConGoogle() async {
-    try {
-      final UserCredential cred;
-      if (kIsWeb) {
-        cred = await _auth.signInWithPopup(GoogleAuthProvider());
-      } else {
-        final google = GoogleSignIn.instance;
-        _googleListo ??= google.initialize(
-          serverClientId: AuthConfig.googleServerClientId.isEmpty
-              ? null
-              : AuthConfig.googleServerClientId,
-        );
-        await _googleListo;
-        final cuenta = await google.authenticate();
-        final idToken = cuenta.authentication.idToken;
-        if (idToken == null) {
-          throw const ErrorAuth('Google no devolvió los datos de la cuenta. Inténtalo de nuevo.');
-        }
-        cred = await _auth.signInWithCredential(GoogleAuthProvider.credential(idToken: idToken));
-      }
-      await _asegurarPerfil(cred, proveedor: 'google.com');
-    } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled) throw const InicioCancelado();
-      if (e.code == GoogleSignInExceptionCode.clientConfigurationError ||
-          e.code == GoogleSignInExceptionCode.providerConfigurationError) {
-        throw const ErrorAuth(
-          'El inicio con Google aún no está configurado en Firebase. Revisa docs/autenticacion.md.',
-        );
-      }
-      throw ErrorAuth('No se pudo iniciar sesión con Google (${e.code.name}).');
-    } on FirebaseAuthException catch (e) {
-      if (_esCancelacion(e.code)) throw const InicioCancelado();
-      throw ErrorAuth(mensajeDeError(e.code), codigo: e.code);
-    }
-  }
-
-  Future<void> iniciarConFacebook() async {
-    if (!kIsWeb && !AuthConfig.facebookConfigurado) {
-      throw const ErrorAuth(
-        'El inicio con Facebook está listo en el código, pero falta poner las claves de la app de Meta. Revisa docs/autenticacion.md.',
-      );
-    }
-    try {
-      final UserCredential cred;
-      if (kIsWeb) {
-        cred = await _auth.signInWithPopup(FacebookAuthProvider()..addScope('email'));
-      } else {
-        final resultado = await FacebookAuth.instance.login(permissions: ['email', 'public_profile']);
-        switch (resultado.status) {
-          case LoginStatus.success:
-            final token = resultado.accessToken!.tokenString;
-            cred = await _auth.signInWithCredential(FacebookAuthProvider.credential(token));
-          case LoginStatus.cancelled:
-            throw const InicioCancelado();
-          case LoginStatus.failed:
-          case LoginStatus.operationInProgress:
-            throw ErrorAuth('No se pudo iniciar sesión con Facebook. ${resultado.message ?? ''}'.trim());
-        }
-      }
-      await _asegurarPerfil(cred, proveedor: 'facebook.com');
-    } on FirebaseAuthException catch (e) {
-      if (_esCancelacion(e.code)) throw const InicioCancelado();
-      throw ErrorAuth(mensajeDeError(e.code), codigo: e.code);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
   // Perfil y sesión
   // ---------------------------------------------------------------------------
 
-  /// Guarda la autorización de tratamiento de datos (la piden las cuentas de
-  /// Google o Facebook la primera vez que entran).
+  /// Actualiza los datos que el usuario puede editar en Perfil.
+  Future<void> actualizarPerfil(
+    String uid, {
+    required String nombre,
+    required String apellido,
+    required String telefono,
+    required String ciudad,
+    required Preferencias preferencias,
+  }) async {
+    try {
+      await _perfilRef(uid).set({
+        'nombre': nombre.trim(),
+        'apellido': apellido.trim(),
+        'telefono': telefono.trim(),
+        'ciudad': ciudad.trim(),
+        'preferencias': preferencias.aFirestore(),
+      }, SetOptions(merge: true)).timeout(esperaServidor);
+    } on TimeoutException {
+      // Ya quedó guardado en el dispositivo; se sincroniza en segundo plano.
+    }
+    final completo = [nombre.trim(), apellido.trim()].where((p) => p.isNotEmpty).join(' ');
+    try {
+      await _auth.currentUser?.updateDisplayName(completo).timeout(esperaServidor);
+    } on Object catch (e) {
+      debugPrint('No se pudo actualizar el nombre visible: $e');
+    }
+  }
+
+  /// Elimina la cuenta y TODOS sus datos (Ley 1581: derecho de supresión).
+  /// Lo hace la Cloud Function `eliminarCuenta`; luego se cierra la sesión.
+  Future<void> eliminarCuenta() async {
+    try {
+      await _functions
+          .httpsCallable('eliminarCuenta', options: HttpsCallableOptions(timeout: const Duration(minutes: 5)))
+          .call({'confirmacion': 'ELIMINAR'});
+    } on FirebaseFunctionsException catch (e) {
+      throw ErrorAuth(e.message ?? 'No se pudo eliminar la cuenta. Inténtalo de nuevo.', codigo: e.code);
+    }
+    await cerrarSesion().catchError((_) {});
+  }
+
+  /// Guarda la autorización de tratamiento de datos (la pide AuthGate a las
+  /// cuentas que aún no la tienen o tienen una versión anterior del texto).
   Future<void> aceptarConsentimiento(String uid) {
     return _perfilRef(uid).set(
       {'consentimientoDatos': const ConsentimientoDatos(aceptado: true).aFirestore()},
@@ -215,16 +203,16 @@ class AuthRepositorio {
     );
   }
 
-  /// Crea el documento `users/{uid}` si es la primera vez que entra con Google
-  /// o Facebook; si ya existe, solo actualiza la fecha del último acceso.
-  Future<void> _asegurarPerfil(UserCredential cred, {required String proveedor}) async {
-    final usuario = cred.user!;
+  /// Crea `users/{uid}` con los datos de la cuenta si todavía no existe.
+  /// También lo usa `AuthGate` para recuperar cuentas que quedaron sin perfil.
+  Future<void> crearPerfilSiFalta(User usuario, {String? proveedor}) async {
     final ref = _perfilRef(usuario.uid);
-    final doc = await ref.get();
+    final doc = await ref.get().timeout(tiempoMaximoPerfil);
     if (doc.exists) {
       await _registrarAcceso(usuario);
       return;
     }
+    proveedor ??= usuario.providerData.isNotEmpty ? usuario.providerData.first.providerId : 'password';
     final partes = (usuario.displayName ?? '').trim().split(RegExp(r'\s+'));
     final perfil = PerfilUsuario(
       uid: usuario.uid,
@@ -235,7 +223,7 @@ class AuthRepositorio {
       fotoUrl: usuario.photoURL,
       proveedor: proveedor,
     );
-    await ref.set(perfil.aFirestoreNuevo());
+    await ref.set(perfil.aFirestoreNuevo()).timeout(tiempoMaximoPerfil);
   }
 
   Future<void> _registrarAcceso(User usuario) async {
@@ -243,30 +231,15 @@ class AuthRepositorio {
       await _perfilRef(usuario.uid).set(
         {'ultimoAcceso': FieldValue.serverTimestamp()},
         SetOptions(merge: true),
-      );
-    } on FirebaseException catch (e) {
-      // No impide entrar a la app (por ejemplo, sin conexión).
-      debugPrint('No se pudo registrar el último acceso: ${e.code}');
+      ).timeout(esperaServidor);
+    } on Object catch (e) {
+      // No impide entrar a la app (por ejemplo, sin conexión o con el
+      // servidor lento: se sincroniza después).
+      debugPrint('No se pudo registrar el último acceso: $e');
     }
   }
 
-  Future<void> cerrarSesion() async {
-    if (!kIsWeb) {
-      final proveedores = _auth.currentUser?.providerData.map((p) => p.providerId).toSet() ?? {};
-      if (proveedores.contains('google.com')) {
-        await GoogleSignIn.instance.signOut().catchError((_) {});
-      }
-      if (proveedores.contains('facebook.com') && AuthConfig.facebookConfigurado) {
-        await FacebookAuth.instance.logOut().catchError((_) {});
-      }
-    }
-    await _auth.signOut();
-  }
-
-  static bool _esCancelacion(String codigo) =>
-      codigo == 'popup-closed-by-user' ||
-      codigo == 'cancelled-popup-request' ||
-      codigo == 'web-context-canceled';
+  Future<void> cerrarSesion() => _auth.signOut();
 
   /// Traduce los códigos de Firebase Authentication a mensajes que dicen qué hacer.
   static String mensajeDeError(String codigo) {
@@ -292,8 +265,6 @@ class AuthRepositorio {
         return 'Ya tienes una cuenta con este correo usando otro método. Entra con ese método.';
       case 'operation-not-allowed':
         return 'Este método de inicio de sesión no está activado en Firebase todavía.';
-      case 'popup-blocked':
-        return 'El navegador bloqueó la ventana emergente. Permítela e inténtalo de nuevo.';
       case 'requires-recent-login':
         return 'Por seguridad, vuelve a iniciar sesión y repite la acción.';
       default:
