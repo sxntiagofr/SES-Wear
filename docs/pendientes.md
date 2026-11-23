@@ -2,16 +2,16 @@
 
 ## Ruta rápida (gratis, sin tarjeta) — revisado el 22 de noviembre de 2026
 
-Al revisar el proyecto `ses-wear` se encontró que **la base de datos Firestore no está creada**, **Storage no existe** y **Firebase AI Logic está desactivado**. Por eso el registro se quedaba cargando y nada quedaba guardado. Pasos:
+En la revisión inicial del proyecto `ses-wear` se encontró que **la base de datos Firestore no estaba creada**, **Storage no estaba habilitado** y **Firebase AI Logic estaba desactivado**. Por eso el registro se quedaba cargando y nada quedaba guardado. La configuración actual y los pasos que aún aplican se detallan abajo:
 
-> ✅ **Hecho el 22/11/2026:** base de datos `(default)` creada (edición Standard, modo nativo, `nam5`), reglas de `firestore.rules` publicadas y claves de Gemini y remove.bg probadas. Correo/contraseña ya estaba habilitado en Authentication.
+> ✅ **Hecho el 22/11/2026:** base de datos `(default)` creada (edición Standard, modo nativo, `nam5`), reglas de `firestore.rules` publicadas, claves locales configuradas y correo/contraseña habilitado en Authentication. La compilación web release terminó correctamente; el APK queda pendiente de configurar Android SDK en este PC.
 
-1. **Crear la base de datos (obligatorio).** Firebase Console → `ses-wear` → *Compilación* → **Firestore Database** → **Crear base de datos** → ubicación `southamerica-east1` (o `nam5`) → *Modo de producción* → Crear.
-2. **Publicar las reglas.** En Firestore → pestaña **Reglas**, pegar todo el contenido de `firestore.rules` y **Publicar**. (O con Firebase CLI: `firebase deploy --only firestore:rules,firestore:indexes`.)
+1. **Crear la base de datos (hecho para `ses-wear`).** Para otro proyecto: Firebase Console → *Compilación* → **Firestore Database** → **Crear base de datos** → ubicación `southamerica-east1` (o `nam5`) → *Modo de producción* → Crear.
+2. **Publicar las reglas (hecho para `ses-wear`).** Para actualizar o configurar otro proyecto: Firestore → pestaña **Reglas**, pegar el contenido de `firestore.rules` y **Publicar**. (O con Firebase CLI: `firebase deploy --only firestore:rules,firestore:indexes`.)
 3. **IA del asistente: una de las dos opciones.**
    - **A (recomendada, sin clave):** Firebase Console → *AI Logic* → **Comenzar** → *Gemini Developer API*.
    - **B (con clave):** crear una clave gratis en <https://aistudio.google.com/apikey> y pegarla en `claves.json` → `GEMINI_API_KEY`.
-4. **IA para quitar el fondo:** crear la clave gratis en <https://www.remove.bg/dashboard#api-key> (50 fotos al mes) y pegarla en `claves.json` → `REMOVE_BG_API_KEY`. Así no hace falta el plan Blaze ni publicar la Cloud Function.
+4. **IA para quitar el fondo:** crear la clave gratis en <https://www.remove.bg/dashboard#api-key> (50 fotos al mes) y agregarla localmente en `claves.json` → `REMOVE_BG_API_KEY`. Para pruebas, la app puede llamar a remove.bg directamente sin Blaze; la clave queda embebida en el binario, así que para producción conviene usar la Cloud Function con el secreto guardado en Firebase.
 5. **Ejecutar la app con las claves:** en VS Code elegir la configuración **SES Wear** y pulsar F5, o en la terminal:
    `flutter run --dart-define-from-file=claves.json`
 
@@ -108,7 +108,7 @@ La prenda se puede guardar igual, con la foto original.
 
 ### Por qué
 
-El fondo lo quita **remove.bg**, un servicio externo que necesita una API key. Esa clave **no puede ir dentro de la app** (cualquiera podría sacarla del APK y gastar el cupo), así que la llamada la hace una **Cloud Function** (`quitarFondo`, en `functions/index.js`) que guarda la clave en el gestor de secretos de Firebase. Esa función está programada y probada, pero **nunca se ha publicado** en Firebase, y para publicar Cloud Functions Firebase exige el **plan Blaze**.
+El fondo lo quita **remove.bg**, un servicio externo que necesita una API key. Para pruebas locales, la app puede leer `REMOVE_BG_API_KEY` desde `claves.json` y llamar directamente al servicio; la clave se puede extraer del APK y no debe usarse así en producción. La opción de producción es la **Cloud Function** `quitarFondo` (`functions/index.js`), que lee la clave del gestor de secretos de Firebase. Publicar Cloud Functions exige el **plan Blaze**.
 
 ### Qué hay que hacer
 

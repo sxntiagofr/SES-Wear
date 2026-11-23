@@ -59,13 +59,13 @@ El id del documento es la fecha. Campos: `fecha` (igual al id), `outfitId`, `out
 Contador de usos diarios de las funciones de IA por usuario (`chat`, `identificarPrenda`, `generarOutfits`, `quitarFondo`), en hora de Colombia. Lo escribe solo el servidor (`functions/src/limites.js`); la app puede leerlo.
 
 ## `users/{uid}/conversaciones/{id}` y `mensajes/{id}`
-Los escribe la Cloud Function `chat` (`functions/src/datos.js`): conversación con `titulo`, `fechaCreacion`, `ultimaActividad`; cada mensaje con `rol`, `texto`, `tieneFoto`, `fecha`.
+Los escribe `AsistenteRepositorio` desde la app después de recibir respuesta de Gemini. La conversación guarda `titulo`, `fechaCreacion`, `ultimaActividad`; cada mensaje guarda `rol`, `texto`, `fecha` y, para respuestas, `rechazado`. Al abrir el asistente se carga la conversación más reciente.
 
 ## Eliminar la cuenta
 La Cloud Function `eliminarCuenta` borra `users/{uid}` con todas sus subcolecciones, las fotos de `users/{uid}/` en Storage y la cuenta de Authentication (Ley 1581, derecho de supresión).
 
-## Cloud Storage
-`users/{uid}/prendas/...` — fotos de las prendas. Solo el dueño las lee; solo imágenes de máximo 10 MB (`storage.rules`).
+## Fotos: Cloud Storage y alternativa Firestore
+Cuando Storage está disponible, las fotos se guardan en `users/{uid}/prendas/...`; solo el dueño puede leerlas y se aceptan imágenes de máximo 10 MB (`storage.rules`). Si Storage no está disponible o falla, la app comprime la imagen y la guarda como Data URL (`data:image/...;base64,...`) en `fotoUrl` del documento de la prenda.
 
 ## Dónde verlo
 - Usuarios registrados: **Authentication → Usuarios**.

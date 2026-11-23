@@ -1,56 +1,53 @@
 # Arquitectura
 
-> Borrador inicial. La arquitectura definitiva en Firebase/Firestore la está diseñando el equipo; actualizar este documento cuando quede definida.
-
 ## Visión general
 
+La aplicación está desarrollada en Flutter y usa Firebase para autenticación, datos y servicios de backend. Cada usuario tiene sus datos bajo `users/{uid}`; las reglas de Firestore y Storage limitan el acceso al propietario.
+
 ```
-App Flutter (lib/features/*)
-   │
-   ├── Firebase Authentication  → registro, inicio de sesión, recuperar contraseña
-   ├── Cloud Firestore          → usuarios, prendas, outfits, colecciones, planificador
-   ├── Firebase Storage         → fotos de las prendas
-   └── Cloud Functions (`chat`) → asistente de moda con Gemini; lee las prendas y guarda el historial en Firestore
+App Flutter
+   ├── Firebase Authentication → registro, inicio y recuperación de contraseña
+   ├── Cloud Firestore          → perfil, prendas, outfits, colecciones y planificador
+   ├── Firebase Storage         → fotos cuando el servicio está disponible
+   ├── Firebase AI Logic        → Gemini para chat, identificación e ideas de outfits
+   └── Cloud Functions          → quitar fondo (alternativa segura) y eliminar cuenta
 ```
 
-Los datos se organizan por usuario para mantener separados los armarios personales. Las reglas de seguridad (`firestore.rules`, `storage.rules`) solo permiten que cada usuario acceda a lo que está bajo su propio `uid`.
+### Servicios de IA e imágenes
 
-## Modelo de datos propuesto (Firestore)
+- `ServicioIA` conecta chat, identificación de prendas y outfits con Gemini. Por defecto usa Firebase AI Logic. Si se configura `GEMINI_API_KEY` en `claves.json`, usa Gemini directamente.
+- `AsistenteRepositorio` obtiene el perfil y las prendas de Firestore, prepara el contexto para el modelo y guarda preguntas y respuestas en la subcolección de conversaciones.
+- El fondo se quita con remove.bg. Con `REMOVE_BG_API_KEY` configurada, la app llama al servicio directamente; sin ella, usa la Cloud Function `quitarFondo`.
+- Las claves definidas al compilar la app pueden extraerse de su binario. La opción directa es para desarrollo/pruebas; para producción, guardar claves en el servidor y usar Firebase AI Logic o Cloud Functions.
+- Al guardar una prenda, la imagen se sube a Storage. Si Storage no está habilitado o falla, se comprime y guarda como Data URL en el campo `fotoUrl` de Firestore.
+
+La configuración local se describe en [Puesta en marcha y despliegue](despliegue.md); `claves.json` se deriva de `claves.example.json` y está ignorado por Git.
+
+## Modelo de datos en Firestore
 
 ```
 users/{uid}
-  ├── nombre, correo, fechaRegistro, preferencias, ciudad
-  │
+  ├── perfil: nombre, apellido, email, teléfono, ciudad, preferencias, consentimiento
   ├── prendas/{prendaId}
-  │     nombre, categoria, tipo (superior | inferior | calzado | accesorio),
-  │     colorPrimario, colorSecundario, tela, estilo, talla, marca,
-  │     estacion, formalidad, precio, vecesUsada, ultimoUso,
-  │     fotoUrl, etiquetas[], fechaCreacion, identificadaPorIA
-  │
+  │     nombre, tipo, categoria, colores, tela, estilo, formalidad, estacion,
+  │     etiquetas[], precio, vecesUsada, ultimoUso, fotoUrl, identificadaPorIA
+  ├── conversaciones/{conversacionId}
+  │     titulo, fechaCreacion, ultimaActividad
+  │     └── mensajes/{mensajeId}: rol, texto, rechazado, fecha
   ├── outfits/{outfitId}
-  │     nombre, prendaIds[], ocasion, favorito, calificacion, fechaCreacion
-  │
+  │     nombre, prendaIds[], ocasion, clima, explicacion, favorito, calificacion, origen
   ├── colecciones/{coleccionId}
-  │     nombre, prendaIds[]
-  │
-  └── planificador/{fecha}          // fecha en formato AAAA-MM-DD
-        outfitId, nota
-│
-└── conversaciones/{conversacionId}      // las escribe la Cloud Function `chat`
-      titulo, fechaCreacion, ultimaActividad
-      └── mensajes/{mensajeId}
-            rol (usuario | asistente), texto, tieneFoto, rechazado, fecha
+  │     nombre, descripcion, prendaIds[], fechaCreacion
+  ├── planificador/{AAAA-MM-DD}
+  │     outfitId, outfitNombre, prendaIds[], nota, actualizado
+  └── uso/{AAAA-MM-DD}              // contadores gestionados por el servidor
 ```
 
-Fotos en Storage: `users/{uid}/prendas/{prendaId}.jpg`
+El detalle de campos y reglas está en [Base de datos](base-de-datos.md), `firestore.rules` y `storage.rules`.
 
 ## Organización del código
 
-Cada carpeta de `lib/features/` agrupa todo lo de una funcionalidad (pantallas, widgets, lógica y acceso a datos), de modo que se puedan agregar módulos nuevos sin tocar los existentes. Lo compartido entre módulos (tema, constantes, servicios de Firebase) va en `lib/core/`.
-
-## Pendiente por definir
-
-- [ ] Modelo de datos definitivo en Firestore
-- [ ] Servicio de IA para reconocimiento de prendas (Cloud Functions, API externa o backend en Python)
-- [x] Proveedor del chatbot: Gemini desde Cloud Functions (`functions/`)
-- [ ] Servicio de clima para las recomendaciones
+- `lib/core/`: configuración, sesión, tema, IA, utilidades y widgets compartidos.
+- `lib/features/`: módulos de autenticación, armario, outfits, asistente, colecciones, estadísticas, planificador y perfil.
+- `functions/`: endpoints de servidor, incluidos quitar fondo y eliminación de cuenta.
+- `test/` y `test-firebase/`: pruebas unitarias, de widgets, reglas y funciones.

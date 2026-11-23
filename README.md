@@ -51,8 +51,8 @@ SES-Wear/
 │   └── features/             # Un módulo por funcionalidad (data/ models/ screens/ widgets/)
 │       ├── home/  auth/  wardrobe/  outfits/  assistant/
 │       └── collections/  stats/  planner/  profile/
-├── functions/                # Cloud Functions: chat, identificarPrenda, quitarFondo,
-│   ├── src/                  #   generarOutfits, eliminarCuenta + límite diario de IA
+├── functions/                # Cloud Functions para quitar fondo y eliminar cuenta
+│   ├── src/                  # Lógica del servidor y límites de uso
 │   └── test/                 # Pruebas de la lógica del servidor (npm test)
 ├── test/                     # Pruebas de la app (flutter test)
 ├── test-firebase/            # Pruebas de reglas y funciones con los emuladores
@@ -63,21 +63,21 @@ SES-Wear/
 └── storage.rules             # Reglas de Storage
 ```
 
-## Cómo funciona el asistente con la base de datos
+## Cómo funciona la IA y el asistente
 
 ```
 App Flutter (pestaña Asistente)
-   │  FirebaseFunctions.httpsCallable('chat')  { mensajes, conversacionId }
+   │ AsistenteRepositorio: lee el perfil y las prendas de Firestore
    ▼
-Cloud Function `chat` (functions/index.js)
-   │ 1. Lee de Firestore el perfil (users/{uid}) y las prendas (users/{uid}/prendas)
-   │ 2. Se las pasa a Gemini como contexto junto con la conversación
-   │ 3. Guarda la pregunta y la respuesta en users/{uid}/conversaciones/{id}/mensajes
-   ▼
-App ← { texto, rechazado, conversacionId }  (al abrir el chat se carga el historial desde Firestore)
+ServicioIA → Firebase AI Logic (Gemini Developer API)
+   │
+   ├── GEMINI_API_KEY configurada: llamada directa a Gemini
+   └── Sin clave: Firebase AI Logic gestiona el acceso
+
+AsistenteRepositorio → guarda preguntas y respuestas en Firestore
 ```
 
-Así, el asistente recomienda combinaciones con las prendas que el usuario ya registró en su armario. La API key de Gemini vive solo en el servidor (Secret Manager); nunca en la app.
+El asistente recomienda combinaciones usando el armario del usuario y conserva el historial en `users/{uid}/conversaciones`. La identificación de prendas y las ideas de outfits también usan Gemini. Las claves locales son opcionales; si se incluyen en la app, quedan embebidas en el binario, así que para producción se recomienda Firebase AI Logic y Cloud Functions con secretos en el servidor.
 
 ## Cómo empezar
 
@@ -89,13 +89,32 @@ Así, el asistente recomienda combinaciones con las prendas que el usuario ya re
 
 ### Ejecutar la app
 
+Para usar las claves locales opcionales, crea `claves.json` a partir de la plantilla y agrega allí tus claves. El archivo está excluido de Git:
+
+```powershell
+Copy-Item claves.example.json claves.json
+```
+
+En VS Code, selecciona **SES Wear** y pulsa F5. Desde la terminal:
+
 ```bash
 git clone https://github.com/sxntiagofr/SES-Wear.git
 cd SES-Wear
 flutter pub get
-flutter run                                      # contra el proyecto real
-flutter run --dart-define=USAR_EMULADORES=true   # contra los emuladores locales
+flutter run --dart-define-from-file=claves.json
+flutter run --dart-define=USAR_EMULADORES=true --dart-define-from-file=claves.json
 ```
+
+`GEMINI_API_KEY` usa Gemini directamente; si se deja vacía, la app usa Firebase AI Logic. `REMOVE_BG_API_KEY` llama directamente a remove.bg; si se deja vacía, se usa la Cloud Function `quitarFondo`. Las claves pasadas al compilar pueden extraerse de la app: úsalas solo para desarrollo y no las compartas ni las subas al repositorio. Consulta [`docs/despliegue.md`](docs/despliegue.md).
+
+### Compilar
+
+```bash
+flutter build web --release
+flutter build apk --release
+```
+
+La compilación Android requiere Android Studio y el Android SDK configurado.
 
 ### Poner en marcha el backend y los inicios de sesión
 

@@ -27,9 +27,19 @@ Mientras no se haga, el chat y la identificación muestran: *"La IA todavía no 
 
 Los modelos se configuran en `lib/core/ia/servicio_ia.dart` (`gemini-flash-latest` y, de respaldo, `gemini-flash-lite-latest`).
 
+### Claves locales opcionales
+
+Para desarrollo o pruebas, copia `claves.example.json` a `claves.json` y completa solo las claves que necesites. La configuración de VS Code **SES Wear** y este comando pasan el archivo a Flutter:
+
+```bash
+flutter run --dart-define-from-file=claves.json
+```
+
+`GEMINI_API_KEY` selecciona una llamada directa a Gemini; si no está configurada, se usa Firebase AI Logic. `REMOVE_BG_API_KEY` llama a remove.bg directamente; si no está configurada, se usa la Cloud Function. Estas claves quedan dentro del binario y no deben usarse así en producción ni subirse a Git (`claves.json` está en `.gitignore`).
+
 ## 3. Quitar el fondo (remove.bg) y eliminar cuenta: Cloud Functions
 
-Solo dos funciones necesitan servidor: `quitarFondo` (la clave de remove.bg no puede ir en la app) y `eliminarCuenta`.
+La app puede llamar a remove.bg directamente con una clave local para pruebas, pero esa clave queda expuesta dentro del binario. Para producción, usar la Cloud Function `quitarFondo`, que obtiene la clave de Secret Manager. `eliminarCuenta` también se ejecuta en el servidor.
 
 1. Pasar el proyecto `ses-wear` al plan **Blaze** (las funciones llaman una API externa). El uso de este proyecto queda dentro del nivel gratuito.
 2. `firebase login`
@@ -81,7 +91,7 @@ flutter run --dart-define=USAR_EMULADORES=true
 
 Si el puerto 8080 ya está ocupado (otro programa), cerrar ese programa o cambiar el puerto de Firestore en `firebase.json` y en `_conectarEmuladores` de `lib/main.dart`.
 
-Con `USAR_EMULADORES=true` la app usa Auth, Firestore, Storage y Functions locales (en el emulador de Android se conectan por `10.0.2.2`). La IA (chat e identificación de prendas) usa siempre el proyecto real con Firebase AI Logic; quitar el fondo en el emulador necesita la clave de remove.bg en `functions/.secret.local`. Sin ellas se muestra un error controlado y el resto de la app funciona igual. Lo que falta configurar está en [`pendientes.md`](pendientes.md).
+Con `USAR_EMULADORES=true` la app usa Auth, Firestore, Storage y Functions locales (en el emulador de Android se conectan por `10.0.2.2`). Sin `GEMINI_API_KEY`, la IA usa Firebase AI Logic del proyecto configurado; si se pasa la clave, las llamadas a Gemini van directamente al servicio externo. Para quitar fondo se puede usar la clave local o la Cloud Function con `functions/.secret.local`. Sin configuración disponible, se muestra un error controlado y el resto de la app sigue funcionando. Lo que falta configurar está en [`pendientes.md`](pendientes.md).
 
 ### Lista de verificación manual (antes de la entrega)
 
@@ -102,4 +112,12 @@ Con `USAR_EMULADORES=true` la app usa Auth, Firestore, Storage y Functions local
 flutter build apk --release
 ```
 
-El archivo queda en `build/app/outputs/flutter-apk/app-release.apk`. Para la versión final hay que firmarla con la llave de release (y agregar su SHA-1 y SHA-256 en Firebase, pasos 3 y 4).
+El archivo queda en `build/app/outputs/flutter-apk/app-release.apk`. Para compilar se necesita Android Studio y Android SDK configurado (`flutter doctor`). Para la versión final hay que firmarla con la llave de release (y agregar su SHA-1 y SHA-256 en Firebase, pasos 3 y 4).
+
+Para compilar la versión web:
+
+```bash
+flutter build web --release
+```
+
+Los archivos quedan en `build/web/`.
