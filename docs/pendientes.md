@@ -1,5 +1,28 @@
 # Lo que falta para que SES Wear funcione completa
 
+## Ruta rápida (gratis, sin tarjeta) — revisado el 22 de noviembre de 2026
+
+Al revisar el proyecto `ses-wear` se encontró que **la base de datos Firestore no está creada**, **Storage no existe** y **Firebase AI Logic está desactivado**. Por eso el registro se quedaba cargando y nada quedaba guardado. Pasos:
+
+> ✅ **Hecho el 22/11/2026:** base de datos `(default)` creada (edición Standard, modo nativo, `nam5`), reglas de `firestore.rules` publicadas y claves de Gemini y remove.bg probadas. Correo/contraseña ya estaba habilitado en Authentication.
+
+1. **Crear la base de datos (obligatorio).** Firebase Console → `ses-wear` → *Compilación* → **Firestore Database** → **Crear base de datos** → ubicación `southamerica-east1` (o `nam5`) → *Modo de producción* → Crear.
+2. **Publicar las reglas.** En Firestore → pestaña **Reglas**, pegar todo el contenido de `firestore.rules` y **Publicar**. (O con Firebase CLI: `firebase deploy --only firestore:rules,firestore:indexes`.)
+3. **IA del asistente: una de las dos opciones.**
+   - **A (recomendada, sin clave):** Firebase Console → *AI Logic* → **Comenzar** → *Gemini Developer API*.
+   - **B (con clave):** crear una clave gratis en <https://aistudio.google.com/apikey> y pegarla en `claves.json` → `GEMINI_API_KEY`.
+4. **IA para quitar el fondo:** crear la clave gratis en <https://www.remove.bg/dashboard#api-key> (50 fotos al mes) y pegarla en `claves.json` → `REMOVE_BG_API_KEY`. Así no hace falta el plan Blaze ni publicar la Cloud Function.
+5. **Ejecutar la app con las claves:** en VS Code elegir la configuración **SES Wear** y pulsar F5, o en la terminal:
+   `flutter run --dart-define-from-file=claves.json`
+
+`claves.json` está en `.gitignore`: **no se sube a GitHub**. La plantilla es `claves.example.json`.
+
+**Fotos sin Storage:** en el plan gratuito los proyectos nuevos no tienen Storage, así que la app guarda cada foto reducida (máx. 640 px) dentro del documento de la prenda en Firestore (`fotoUrl` = `data:image/...;base64,...`). Si más adelante activan Storage (plan Blaze), la app lo usa sola.
+
+---
+
+## Ruta completa (plan Blaze)
+
 El código de la app ya está terminado y probado (`flutter test`, pruebas de Cloud Functions y de reglas pasan). Lo que falta **no es programar**: son pasos de configuración en Firebase que solo puede hacer alguien con acceso al proyecto `ses-wear`.
 
 | # | Funcionalidad | Qué ve hoy el usuario | Qué falta | ¿Cuesta? |
