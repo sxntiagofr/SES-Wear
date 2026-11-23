@@ -46,8 +46,11 @@ class _RegistroScreenState extends State<RegistroScreen> {
     final ok = await ejecutarAccionAuth(context, accion);
     if (!mounted) return;
     setState(() => _cargando = false);
-    // La sesión ya está abierta: se vuelve a la raíz, donde AuthGate muestra la app.
-    if (ok) Navigator.of(context).popUntil((ruta) => ruta.isFirst);
+    if (!ok) return;
+    // La cuenta quedó creada y la sesión abierta: se avisa y se vuelve a la
+    // raíz, donde AuthGate muestra de una vez el inicio de la app.
+    mostrarMensaje(context, '¡Registro exitoso! Bienvenido(a) a SES Wear, ${_nombre.text.trim()}.');
+    Navigator.of(context).popUntil((ruta) => ruta.isFirst);
   }
 
   void _registrarme() {

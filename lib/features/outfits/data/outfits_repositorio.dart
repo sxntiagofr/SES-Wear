@@ -18,7 +18,7 @@ class OutfitsRepositorio {
   final ServicioIA? _iaInyectada;
   final FirebaseAuth? _auth;
 
-  ServicioIA get _ia => _iaInyectada ?? ServicioIAFirebase.instancia;
+  ServicioIA get _ia => _iaInyectada ?? servicioIAPorDefecto;
 
   Future<CollectionReference<Map<String, dynamic>>> _outfits() async {
     final uid = await Sesion.uid(_auth);

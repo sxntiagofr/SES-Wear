@@ -44,7 +44,7 @@ class _ArmarioScreenState extends State<ArmarioScreen> {
     super.dispose();
   }
 
-  Future<void> _elegirOrigen() => agregarPrenda(context, repositorio: _repo);
+  Future<void> _elegirOrigen() => agregarPrenda(context, repositorio: _repo, abrirArmario: false);
 
   Future<void> _confirmarEliminar(Prenda prenda) async {
     final eliminar = await showDialog<bool>(

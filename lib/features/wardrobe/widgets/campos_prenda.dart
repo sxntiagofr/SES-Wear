@@ -9,7 +9,6 @@ class FormularioPrenda {
   final colorPrimario = TextEditingController();
   final colorSecundario = TextEditingController();
   final tela = TextEditingController();
-  final estilo = TextEditingController();
   final etiquetas = TextEditingController();
   final precio = TextEditingController();
   String tipo = 'superior';
@@ -22,7 +21,6 @@ class FormularioPrenda {
     colorPrimario.text = p.colorPrimario;
     colorSecundario.text = p.colorSecundario;
     tela.text = p.tela;
-    estilo.text = p.estilo;
     etiquetas.text = p.etiquetas.join(', ');
     if (p.precio != null) precio.text = p.precio!.toStringAsFixed(0);
     tipo = p.tipo;
@@ -46,7 +44,6 @@ class FormularioPrenda {
       colorPrimario: colorPrimario.text.trim().toLowerCase(),
       colorSecundario: colorSecundario.text.trim().toLowerCase(),
       tela: tela.text.trim().toLowerCase(),
-      estilo: estilo.text.trim().toLowerCase(),
       formalidad: formalidad,
       estacion: estacion,
       etiquetas: etiquetas.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
@@ -62,7 +59,6 @@ class FormularioPrenda {
       colorPrimario: datos.colorPrimario,
       colorSecundario: datos.colorSecundario,
       tela: datos.tela,
-      estilo: datos.estilo,
       formalidad: datos.formalidad,
       estacion: datos.estacion,
       etiquetas: datos.etiquetas,
@@ -72,7 +68,7 @@ class FormularioPrenda {
   }
 
   void dispose() {
-    for (final c in [nombre, categoria, colorPrimario, colorSecundario, tela, estilo, etiquetas, precio]) {
+    for (final c in [nombre, categoria, colorPrimario, colorSecundario, tela, etiquetas, precio]) {
       c.dispose();
     }
   }
@@ -142,7 +138,6 @@ class CamposPrenda extends StatelessWidget {
           ],
         ),
         texto(f.tela, 'Tela'),
-        texto(f.estilo, 'Estilo'),
         opciones('Formalidad', f.formalidad, OpcionesPrenda.formalidades, (v) => f.formalidad = v),
         opciones('Estación', f.estacion, OpcionesPrenda.estaciones, (v) => f.estacion = v),
         texto(f.etiquetas, 'Etiquetas (separadas por coma)'),

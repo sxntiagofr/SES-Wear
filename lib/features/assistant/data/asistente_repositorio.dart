@@ -37,7 +37,7 @@ class AsistenteRepositorio {
   final FirebaseFirestore _firestore;
   final FirebaseAuth? _auth;
 
-  ServicioIA get _ia => _iaInyectada ?? ServicioIAFirebase.instancia;
+  ServicioIA get _ia => _iaInyectada ?? servicioIAPorDefecto;
 
   Future<String> _uid() => Sesion.uid(_auth);
 

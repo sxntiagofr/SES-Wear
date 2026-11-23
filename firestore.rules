@@ -61,7 +61,10 @@ service cloud.firestore {
         && (!('estacion' in d) || d.estacion in ['calor', 'frío', 'lluvia', 'todo el año'])
         && opcional(d, 'categoria', 'string') && opcional(d, 'colorPrimario', 'string')
         && opcional(d, 'colorSecundario', 'string') && opcional(d, 'tela', 'string')
-        && opcional(d, 'estilo', 'string') && opcional(d, 'fotoUrl', 'string')
+        && opcional(d, 'estilo', 'string')
+        // La foto es una URL de Storage o, sin Storage, la imagen reducida en
+        // base64 (data:image/...), por eso admite hasta ~900 KB.
+        && (!('fotoUrl' in d) || d.fotoUrl == null || (d.fotoUrl is string && d.fotoUrl.size() <= 900000))
         && opcional(d, 'etiquetas', 'list') && opcional(d, 'vecesUsada', 'int')
         && opcional(d, 'identificadaPorIA', 'bool') && opcional(d, 'precio', 'number')
         && opcional(d, 'ultimoUso', 'timestamp') && opcional(d, 'fechaCreacion', 'timestamp');

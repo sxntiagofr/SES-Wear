@@ -10,7 +10,7 @@ import '../models/prenda.dart';
 import '../widgets/campos_prenda.dart';
 
 /// Pantalla "Nueva prenda": muestra la foto, la IA llena el formulario
-/// (tipo, categoría, colores, tela, estilo, formalidad, estación) y el usuario
+/// (tipo, categoría, colores, tela, formalidad, estación) y el usuario
 /// puede corregir antes de guardar.
 class NuevaPrendaScreen extends StatefulWidget {
   const NuevaPrendaScreen({
@@ -104,7 +104,7 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
       await _repo.guardar(prenda, _foto, tipo: _tipoFoto);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${prenda.nombre}" se guardó en tu armario.')),
+        SnackBar(content: Text('¡Guardado exitoso! "${prenda.nombre}" ya está en tu armario.')),
       );
       Navigator.of(context).pop(true);
     } catch (_) {
@@ -121,6 +121,7 @@ class _NuevaPrendaScreenState extends State<NuevaPrendaScreen> {
 
   /// Mensaje claro para cada error de la Cloud Function `quitarFondo`.
   static String mensajeFondo(Object error) {
+    if (error is ErrorFondo) return error.mensaje;
     if (error is FirebaseFunctionsException) {
       return switch (error.code) {
         'not-found' || 'internal' when (error.message ?? '').toLowerCase() == error.code =>

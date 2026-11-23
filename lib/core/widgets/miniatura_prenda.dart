@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../features/wardrobe/models/prenda.dart';
 import '../theme/app_theme.dart';
+import '../utils/imagenes.dart';
 
 /// Foto pequeña y cuadrada de una prenda sobre fondo blanco (como en el
 /// diseño), o un ícono si no tiene foto.
@@ -47,8 +48,8 @@ class FotoPrenda extends StatelessWidget {
               ? icono()
               : Padding(
                   padding: EdgeInsets.all(margen),
-                  child: Image.network(
-                    url,
+                  child: Image(
+                    image: imagenDesdeUrl(url),
                     fit: BoxFit.contain,
                     errorBuilder: (_, _, _) => icono(Icons.broken_image_outlined),
                   ),

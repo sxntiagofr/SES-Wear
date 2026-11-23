@@ -33,6 +33,10 @@ class AuthRepositorio {
   /// Tiempo máximo para guardar el perfil antes de avisar que no hay conexión.
   static const tiempoMaximoPerfil = Duration(seconds: 20);
 
+  /// Lo que se espera la confirmación del servidor al registrarse antes de
+  /// dejar entrar al usuario (el perfil ya quedó guardado en el dispositivo).
+  static const esperaServidor = Duration(seconds: 5);
+
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final FirebaseFunctions? _functionsInyectadas;
@@ -106,14 +110,18 @@ class AuthRepositorio {
     );
 
     try {
-      // Sin conexión, Firestore espera indefinidamente a que el servidor
-      // confirme; con el límite de tiempo el usuario no se queda cargando.
-      await _perfilRef(usuario.uid).set(perfil.aFirestoreNuevo()).timeout(tiempoMaximoPerfil);
+      // Firestore guarda el perfil primero en el dispositivo y luego en el
+      // servidor. Solo se espera unos segundos la confirmación del servidor:
+      // si tarda, el perfil ya quedó guardado localmente y se sincroniza solo,
+      // así el usuario entra a la app de una vez en vez de quedarse cargando.
+      await _perfilRef(usuario.uid).set(perfil.aFirestoreNuevo()).timeout(esperaServidor);
+    } on TimeoutException {
+      debugPrint('El perfil se sincronizará con el servidor en segundo plano.');
     } on Object catch (e) {
-      // La cuenta quedó creada pero sin perfil: se borra para que pueda
+      // El servidor rechazó el perfil: se borra la cuenta para que pueda
       // registrarse de nuevo con el mismo correo.
       await usuario.delete().catchError((_) {});
-      final codigo = e is FirebaseException ? e.code : (e is TimeoutException ? 'timeout' : 'desconocido');
+      final codigo = e is FirebaseException ? e.code : 'desconocido';
       throw ErrorAuth(
         'No se pudieron guardar tus datos ($codigo). Revisa tu conexión e inténtalo de nuevo.',
         codigo: codigo,
@@ -123,7 +131,7 @@ class AuthRepositorio {
     // El perfil ya está guardado: si solo falla el nombre visible de
     // Firebase Authentication, la cuenta sigue siendo válida.
     try {
-      await usuario.updateDisplayName(perfil.nombreCompleto);
+      await usuario.updateDisplayName(perfil.nombreCompleto).timeout(const Duration(seconds: 5));
     } on Object catch (e) {
       debugPrint('No se pudo actualizar el nombre visible: $e');
     }
@@ -154,16 +162,20 @@ class AuthRepositorio {
     required String ciudad,
     required Preferencias preferencias,
   }) async {
-    await _perfilRef(uid).set({
-      'nombre': nombre.trim(),
-      'apellido': apellido.trim(),
-      'telefono': telefono.trim(),
-      'ciudad': ciudad.trim(),
-      'preferencias': preferencias.aFirestore(),
-    }, SetOptions(merge: true));
+    try {
+      await _perfilRef(uid).set({
+        'nombre': nombre.trim(),
+        'apellido': apellido.trim(),
+        'telefono': telefono.trim(),
+        'ciudad': ciudad.trim(),
+        'preferencias': preferencias.aFirestore(),
+      }, SetOptions(merge: true)).timeout(esperaServidor);
+    } on TimeoutException {
+      // Ya quedó guardado en el dispositivo; se sincroniza en segundo plano.
+    }
     final completo = [nombre.trim(), apellido.trim()].where((p) => p.isNotEmpty).join(' ');
     try {
-      await _auth.currentUser?.updateDisplayName(completo);
+      await _auth.currentUser?.updateDisplayName(completo).timeout(esperaServidor);
     } on Object catch (e) {
       debugPrint('No se pudo actualizar el nombre visible: $e');
     }
@@ -219,10 +231,11 @@ class AuthRepositorio {
       await _perfilRef(usuario.uid).set(
         {'ultimoAcceso': FieldValue.serverTimestamp()},
         SetOptions(merge: true),
-      );
-    } on FirebaseException catch (e) {
-      // No impide entrar a la app (por ejemplo, sin conexión).
-      debugPrint('No se pudo registrar el último acceso: ${e.code}');
+      ).timeout(esperaServidor);
+    } on Object catch (e) {
+      // No impide entrar a la app (por ejemplo, sin conexión o con el
+      // servidor lento: se sincroniza después).
+      debugPrint('No se pudo registrar el último acceso: $e');
     }
   }
 

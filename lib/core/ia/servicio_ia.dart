@@ -1,7 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../config/claves.dart';
+
+/// Servicio de IA que usa la app: Gemini directo si hay `GEMINI_API_KEY` en
+/// claves.json; si no, Firebase AI Logic.
+ServicioIA get servicioIAPorDefecto =>
+    Claves.hayGemini ? ServicioIAGemini.instancia : ServicioIAFirebase.instancia;
 
 /// Un turno de la conversación que se le envía a la IA.
 class TurnoIA {
@@ -151,7 +160,7 @@ class ServicioIAFirebase implements ServicioIA {
   static String mensajeDeError(Object? e) {
     if (e is ErrorIA) return e.mensaje;
     if (_apiSinActivar(e)) {
-      return 'La IA todavía no está activada en Firebase (AI Logic). Pídele al equipo que la active.';
+      return 'La IA todavía no está activada: activa AI Logic en Firebase o pon GEMINI_API_KEY en claves.json.';
     }
     if (e is QuotaExceeded) {
       return 'Se acabó el cupo gratuito de la IA por ahora. Espera un momento e inténtalo de nuevo.';
@@ -164,5 +173,135 @@ class ServicioIAFirebase implements ServicioIA {
       return 'La IA no pudo procesar esa solicitud. Prueba con otra foto o pregunta.';
     }
     return 'No se pudo conectar con la IA. Revisa tu conexión a internet.';
+  }
+}
+
+/// Gemini llamado directamente con la API key de Google AI Studio
+/// (`GEMINI_API_KEY` en claves.json). No necesita activar nada en Firebase.
+///
+/// La clave se crea gratis en https://aistudio.google.com/apikey.
+class ServicioIAGemini implements ServicioIA {
+  ServicioIAGemini({required this.clave, List<String>? modelos, http.Client? cliente})
+      : modelos = modelos ?? ServicioIAFirebase.modelosPorDefecto,
+        _cliente = cliente ?? http.Client();
+
+  static final instancia = ServicioIAGemini(clave: Claves.gemini);
+
+  static const _url = 'https://generativelanguage.googleapis.com/v1beta/models';
+  static const _tiempoMaximo = Duration(seconds: 60);
+  static const _rechazo = ServicioIAFirebase._rechazo;
+
+  final String clave;
+  final List<String> modelos;
+  final http.Client _cliente;
+
+  static Map<String, Object> _contenido(TurnoIA t) => {
+        'role': t.delUsuario ? 'user' : 'model',
+        'parts': [
+          if (t.imagen != null)
+            {
+              'inline_data': {'mime_type': t.tipoImagen, 'data': base64Encode(t.imagen!)},
+            },
+          {'text': t.texto},
+        ],
+      };
+
+  /// Llama a `generateContent` con cada modelo hasta que uno responda.
+  Future<Map<String, dynamic>> _generar(Map<String, Object> cuerpo) async {
+    ErrorIA? ultimo;
+    for (final modelo in modelos) {
+      final http.Response r;
+      try {
+        r = await _cliente
+            .post(
+              Uri.parse('$_url/$modelo:generateContent'),
+              headers: {'Content-Type': 'application/json', 'x-goog-api-key': clave},
+              body: jsonEncode(cuerpo),
+            )
+            .timeout(_tiempoMaximo);
+      } on TimeoutException {
+        ultimo = const ErrorIA('La IA tardó demasiado en responder. Inténtalo de nuevo.');
+        continue;
+      } catch (_) {
+        throw const ErrorIA('No se pudo conectar con la IA. Revisa tu conexión a internet.');
+      }
+      if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      debugPrint('[IA] $modelo respondió ${r.statusCode}: ${r.body}');
+      ultimo = ErrorIA(_mensaje(r.statusCode, r.body));
+      // Cupo o saturación: se prueba con el siguiente modelo.
+      if (r.statusCode != 429 && r.statusCode < 500) break;
+    }
+    throw ultimo ?? const ErrorIA('La IA no está disponible en este momento.');
+  }
+
+  static String _mensaje(int estado, String cuerpo) {
+    if (estado == 400 && cuerpo.contains('API_KEY_INVALID')) {
+      return 'La clave de Gemini (GEMINI_API_KEY) no es válida. Revisa claves.json.';
+    }
+    if (estado == 400 && cuerpo.contains('location is not supported')) {
+      return 'La IA no está disponible en tu ubicación.';
+    }
+    if (estado == 403) return 'La clave de Gemini no tiene permiso. Revisa claves.json.';
+    if (estado == 429) return 'Se acabó el cupo gratuito de la IA por ahora. Espera un momento e inténtalo de nuevo.';
+    if (estado >= 500) return 'La IA no está disponible en este momento. Inténtalo de nuevo.';
+    return 'La IA no pudo procesar la solicitud ($estado).';
+  }
+
+  /// Texto de la primera respuesta, o null si el filtro de seguridad la bloqueó.
+  static String? _texto(Map<String, dynamic> respuesta) {
+    final candidatos = respuesta['candidates'];
+    if (candidatos is! List || candidatos.isEmpty) return null;
+    final partes = (candidatos.first as Map)['content']?['parts'];
+    if (partes is! List) return null;
+    return partes.map((p) => (p as Map)['text'] ?? '').join().trim();
+  }
+
+  @override
+  Future<RespuestaIA> conversar({required String instrucciones, required List<TurnoIA> historial}) async {
+    final respuesta = await _generar({
+      'system_instruction': {
+        'parts': [
+          {'text': instrucciones},
+        ],
+      },
+      'contents': historial.map(_contenido).toList(),
+    });
+    final texto = _texto(respuesta);
+    if (texto == null) return const RespuestaIA(texto: _rechazo, bloqueada: true);
+    if (texto.isEmpty) throw const ErrorIA('La IA no devolvió respuesta. Inténtalo de nuevo.');
+    return RespuestaIA(texto: texto);
+  }
+
+  @override
+  Future<Map<String, dynamic>> generarJson({
+    required String instrucciones,
+    required TurnoIA pedido,
+    required Schema esquema,
+    double temperatura = 0.2,
+  }) async {
+    final respuesta = await _generar({
+      'system_instruction': {
+        'parts': [
+          {'text': instrucciones},
+        ],
+      },
+      'contents': [_contenido(pedido)],
+      'generationConfig': {
+        'responseMimeType': 'application/json',
+        'responseSchema': esquema.toJson(),
+        'temperature': temperatura,
+      },
+    });
+    final texto = _texto(respuesta);
+    if (texto == null || texto.isEmpty) {
+      throw const ErrorIA('La IA no pudo analizar la solicitud. Inténtalo de nuevo.');
+    }
+    try {
+      final datos = jsonDecode(texto);
+      if (datos is Map<String, dynamic>) return datos;
+    } on FormatException {
+      // Se informa abajo.
+    }
+    throw const ErrorIA('La IA respondió en un formato inesperado. Inténtalo de nuevo.');
   }
 }

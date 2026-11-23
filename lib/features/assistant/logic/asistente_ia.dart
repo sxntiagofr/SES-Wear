@@ -43,7 +43,6 @@ Criterio:
       if (p.categoria.isNotEmpty && p.categoria != nombre) p.categoria,
       if (_color(p).isNotEmpty) 'color ${_color(p)}',
       if (p.tela.isNotEmpty) 'tela ${p.tela}',
-      if (p.estilo.isNotEmpty) 'estilo ${p.estilo}',
       'formalidad ${p.formalidad}',
       'para ${p.estacion}',
       'usada ${p.vecesUsada} ${p.vecesUsada == 1 ? 'vez' : 'veces'}',

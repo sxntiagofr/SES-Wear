@@ -3,17 +3,30 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/prendas_repositorio.dart';
+import 'armario_screen.dart';
 import 'nueva_prenda_screen.dart';
 
 /// Abre la cámara para agregar una prenda. Devuelve `true` si se guardó.
-Future<bool> agregarPrenda(BuildContext context, {PrendasRepositorio? repositorio}) async {
+///
+/// Al guardar, la app muestra «¡Guardado exitoso!» y abre el armario digital
+/// (salvo que ya se esté en él: `abrirArmario: false`).
+Future<bool> agregarPrenda(BuildContext context, {PrendasRepositorio? repositorio, bool abrirArmario = true}) async {
   final guardada = await Navigator.of(context).push<bool>(
     MaterialPageRoute(fullscreenDialog: true, builder: (_) => CamaraScreen(repositorio: repositorio)),
   );
+  if (guardada == true && abrirArmario && context.mounted) {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ArmarioScreen(repositorio: repositorio)),
+    );
+  }
   return guardada == true;
 }
+
+/// Clave en el celular: ya se le explicó al usuario para qué se usa la cámara.
+const _clavePermisoExplicado = 'camara_permiso_explicado';
 
 /// Tipo de imagen de un archivo elegido o tomado.
 String tipoDeImagen(XFile foto) {
@@ -30,7 +43,13 @@ String tipoDeImagen(XFile foto) {
 /// la prenda o elegirla de la galería. Funciona en Android, iOS y en el
 /// navegador (usa la cámara del computador o del celular).
 class CamaraScreen extends StatefulWidget {
-  const CamaraScreen({super.key, this.repositorio, this.buscarCamaras, this.elegirDeGaleria});
+  const CamaraScreen({
+    super.key,
+    this.repositorio,
+    this.buscarCamaras,
+    this.elegirDeGaleria,
+    this.explicarPermiso,
+  });
 
   final PrendasRepositorio? repositorio;
 
@@ -39,6 +58,10 @@ class CamaraScreen extends StatefulWidget {
 
   /// Para pruebas: reemplaza el selector de la galería.
   final Future<XFile?> Function()? elegirDeGaleria;
+
+  /// Mostrar el aviso de permiso de cámara la primera vez. Por defecto sí,
+  /// salvo en las pruebas (cuando se reemplaza la búsqueda de cámaras).
+  final bool? explicarPermiso;
 
   @override
   State<CamaraScreen> createState() => _CamaraScreenState();
@@ -56,7 +79,53 @@ class _CamaraScreenState extends State<CamaraScreen> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _iniciar();
+    _pedirPermisoEIniciar();
+  }
+
+  /// La primera vez explica para qué se usa la cámara antes de que el
+  /// celular (o el navegador) pida el permiso.
+  Future<void> _pedirPermisoEIniciar() async {
+    final explicar = widget.explicarPermiso ?? widget.buscarCamaras == null;
+    if (explicar) {
+      SharedPreferences? prefs;
+      try {
+        prefs = await SharedPreferences.getInstance();
+      } catch (_) {
+        prefs = null;
+      }
+      if (prefs?.getBool(_clavePermisoExplicado) != true) {
+        // Espera a que la pantalla esté visible para mostrar el aviso.
+        await Future<void>.delayed(Duration.zero);
+        if (!mounted) return;
+        final permitir = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            icon: const Icon(Icons.photo_camera_outlined, size: 40),
+            title: const Text('Permitir acceso a la cámara'),
+            content: const Text(
+              'SES Wear necesita usar la cámara de tu dispositivo para tomar fotos de tus prendas, '
+              'quitarles el fondo y guardarlas en tu armario. Las fotos solo se guardan en tu cuenta.\n\n'
+              'A continuación tu dispositivo te pedirá el permiso.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Solo galería')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Permitir cámara')),
+            ],
+          ),
+        );
+        if (!mounted) return;
+        if (permitir != true) {
+          setState(() {
+            _iniciando = false;
+            _error = 'No diste acceso a la cámara. Puedes elegir una foto de la galería o permitir la cámara.';
+          });
+          return;
+        }
+        await prefs?.setBool(_clavePermisoExplicado, true);
+      }
+    }
+    if (mounted) await _iniciar();
   }
 
   @override
@@ -139,7 +208,7 @@ class _CamaraScreenState extends State<CamaraScreen> with WidgetsBindingObserver
     if (e is CameraException) {
       final codigo = e.code.toLowerCase();
       if (codigo.contains('denied') || codigo.contains('permission')) {
-        return 'Permite el acceso a la cámara en los ajustes del navegador o del celular y vuelve a intentarlo.';
+        return 'SES Wear no tiene permiso para usar la cámara. Actívalo en Ajustes del celular → Aplicaciones → SES Wear → Permisos → Cámara (o en el candado de la barra de direcciones del navegador) y pulsa «Reintentar con la cámara».';
       }
       if (codigo.contains('notfound')) return 'No se encontró ninguna cámara en este dispositivo.';
       if (codigo.contains('notreadable') || codigo.contains('inuse')) {
@@ -321,7 +390,12 @@ class _CamaraScreenState extends State<CamaraScreen> with WidgetsBindingObserver
             label: const Text('Elegir de la galería'),
           ),
           TextButton(
-            onPressed: _iniciar,
+            onPressed: () async {
+              try {
+                (await SharedPreferences.getInstance()).setBool(_clavePermisoExplicado, true);
+              } catch (_) {}
+              _iniciar();
+            },
             child: const Text('Reintentar con la cámara', style: TextStyle(color: Colors.white70)),
           ),
         ],

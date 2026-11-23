@@ -185,7 +185,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Permite el acceso a la cámara'), findsOneWidget);
+      expect(find.textContaining('no tiene permiso para usar la cámara'), findsOneWidget);
       expect(find.text('Reintentar con la cámara'), findsOneWidget);
     });
 

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/colores.dart';
+import '../../../core/utils/imagenes.dart';
 import '../data/prendas_repositorio.dart';
 import '../models/prenda.dart';
 import '../widgets/campos_prenda.dart';
@@ -108,8 +109,8 @@ class _DetallePrendaScreenState extends State<DetallePrendaScreen> {
                     color: AppTheme.primaryLight,
                     child: p.fotoUrl == null
                         ? const Icon(Icons.checkroom, size: 72, color: AppTheme.primary)
-                        : Image.network(
-                            p.fotoUrl!,
+                        : Image(
+                            image: imagenDesdeUrl(p.fotoUrl!),
                             fit: BoxFit.contain,
                             errorBuilder: (_, _, _) =>
                                 const Icon(Icons.broken_image_outlined, size: 56, color: AppTheme.primary),
@@ -122,7 +123,7 @@ class _DetallePrendaScreenState extends State<DetallePrendaScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final t in [p.tipo, p.categoria, p.formalidad, p.estacion, p.tela, p.estilo])
+                  for (final t in [p.tipo, p.categoria, p.formalidad, p.estacion, p.tela])
                     if (t.isNotEmpty) Chip(label: Text(CamposPrenda.capitalizar(t))),
                   for (final c in [p.colorPrimario, p.colorSecundario])
                     if (c.isNotEmpty)
